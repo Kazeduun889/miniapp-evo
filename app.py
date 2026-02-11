@@ -8,14 +8,19 @@ from typing import Optional
 
 app = FastAPI()
 
-# Mount static files (we'll create this directory)
-if not os.path.exists("static"):
-    os.makedirs("static")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Настройка путей для шаблонов и статики
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates_path = os.path.join(BASE_DIR, "templates")
+static_path = os.path.join(BASE_DIR, "static")
 
-templates = Jinja2Templates(directory="templates")
-if not os.path.exists("templates"):
-    os.makedirs("templates")
+# Создаем директории, если их нет
+if not os.path.exists(static_path):
+    os.makedirs(static_path)
+if not os.path.exists(templates_path):
+    os.makedirs(templates_path)
+
+app.mount("/static", StaticFiles(directory=static_path), name="static")
+templates = Jinja2Templates(directory=templates_path)
 
 @app.get("/")
 async def read_root(request: Request):
