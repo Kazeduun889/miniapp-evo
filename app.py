@@ -58,21 +58,31 @@ async def get_leaderboard():
         })
     return leaderboard
 
-@app.get("/api/lobbies")
-async def get_lobbies():
+@app.get("/api/lobbies/{user_id}")
+async def get_lobbies(user_id: int):
     import state
     lobby_players = state.lobby_players
     
-    result = {}
+    # Проверяем, в каком лобби сейчас пользователь
+    user_current_lobby = None
     for mode in ["1x1", "2x2", "5x5"]:
-        result[mode] = []
+        for lid in range(1, 11):
+            if user_id in lobby_players[mode][lid]:
+                user_current_lobby = {"mode": mode, "id": lid}
+                break
+        if user_current_lobby: break
+
+    result = {"modes": {}, "user_lobby": user_current_lobby}
+    for mode in ["1x1", "2x2", "5x5"]:
+        result["modes"][mode] = []
         for lid in range(1, 11):
             players = lobby_players[mode][lid]
             max_p = 2 if mode == "1x1" else (4 if mode == "2x2" else 10)
-            result[mode].append({
+            result["modes"][mode].append({
                 "id": lid,
                 "players": len(players),
-                "max": max_p
+                "max": max_p,
+                "is_user_here": user_id in players
             })
     return result
 

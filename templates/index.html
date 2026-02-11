@@ -3,310 +3,313 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Facevo Mini App</title>
+    <title>FACEVO - Игровая Арена</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #09090b;
-            --bg-card: #121214;
-            --primary-purple: #8b5cf6;
-            --primary-purple-hover: #7c3aed;
-            --text-main: #f4f4f5;
-            --text-muted: #a1a1aa;
-            --accent-purple: #c084fc;
+            --bg-deep: #050505;
+            --bg-card: #0f0f12;
+            --primary: #a855f7;
+            --primary-glow: rgba(168, 85, 247, 0.4);
+            --secondary: #6366f1;
+            --text-main: #ffffff;
+            --text-dim: #94a3b8;
+            --accent: #f43f5e;
         }
+
         body {
-            background-color: var(--bg-dark);
+            background-color: var(--bg-deep);
             color: var(--text-main);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'Inter', sans-serif;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
         }
+
+        .font-unbounded { font-family: 'Unbounded', sans-serif; }
+
         .tg-theme {
-            background-color: var(--tg-theme-bg-color, var(--bg-dark));
+            background-color: var(--tg-theme-bg-color, var(--bg-deep));
             color: var(--tg-theme-text-color, var(--text-main));
         }
-        .card {
-            background-color: var(--bg-card);
-            border: 1px solid #27272a;
-            border-radius: 1.25rem;
-            transition: all 0.2s ease;
+
+        /* Glassmorphism & Cards */
+        .glass-card {
+            background: rgba(15, 15, 18, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
         }
-        .active-tab {
-            color: var(--primary-purple);
-            position: relative;
+
+        .active-lobby-pulse {
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+            animation: pulse-border 2s infinite;
         }
-        .active-tab::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 4px;
-            height: 4px;
-            background-color: var(--primary-purple);
-            border-radius: 50%;
+
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 5px var(--primary-glow); }
+            50% { box-shadow: 0 0 20px var(--primary-glow); }
+            100% { box-shadow: 0 0 5px var(--primary-glow); }
         }
+
+        /* Navigation */
+        .nav-active {
+            color: var(--primary);
+            filter: drop-shadow(0 0 8px var(--primary-glow));
+        }
+
         .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 0.5rem 0;
-            flex: 1;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .nav-item i {
-            font-size: 1.4rem;
-            margin-bottom: 0.2rem;
+
+        /* Buttons */
+        .btn-action {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
-        .nav-item span {
-            font-size: 0.7rem;
-            font-weight: 500;
+
+        .btn-action:active { transform: scale(0.96); }
+
+        .btn-leave {
+            background: rgba(244, 63, 94, 0.1);
+            border: 1px solid var(--accent);
+            color: var(--accent);
         }
-        .lobby-card {
-            background: linear-gradient(145deg, #121214 0%, #1a1a1e 100%);
-            border: 1px solid #27272a;
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 0px; }
+
+        .tab-content { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .lobby-card:active {
-            transform: scale(0.97);
-            border-color: var(--primary-purple);
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-purple) 0%, #6d28d9 100%);
-            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-        }
-        .btn-primary:active {
-            transform: scale(0.98);
-            filter: brightness(0.9);
-        }
-        .purple-glow {
-            box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
-        }
-        header {
-            background-color: rgba(9, 9, 11, 0.8);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
         }
     </style>
 </head>
 <body class="tg-theme">
-    <div id="app" class="pb-24">
-        <!-- Header -->
-        <header class="p-4 flex items-center justify-between sticky top-0 z-30 border-b border-zinc-800/50">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 btn-primary rounded-xl flex items-center justify-center shadow-lg">
-                    <i class="fas fa-bolt text-white"></i>
+    <div id="app" class="pb-28">
+        <!-- Индикатор активного лобби -->
+        <div id="active-lobby-banner" class="hidden fixed top-20 left-4 right-4 z-50">
+            <div class="bg-purple-600/90 backdrop-blur-md px-4 py-2 rounded-full flex items-center justify-between shadow-lg border border-purple-400/30">
+                <div class="flex items-center space-x-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                    </span>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-white">В очереди: <span id="active-lobby-text">1X1 #1</span></span>
                 </div>
-                <h1 class="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">FACEVO</h1>
+                <button onclick="showTab('play')" class="text-[10px] font-bold underline text-white uppercase">Перейти</button>
             </div>
-            <div id="user-mini-profile" class="flex items-center space-x-3 bg-zinc-900/50 px-3 py-1.5 rounded-2xl border border-zinc-800">
-                <div class="text-right">
-                    <p id="header-nickname" class="text-xs font-bold text-zinc-200">...</p>
-                    <p id="header-elo" class="text-[10px] font-medium text-purple-400">0 ELO</p>
+        </div>
+
+        <!-- Header -->
+        <header class="p-6 flex items-center justify-between sticky top-0 z-40 bg-black/50 backdrop-blur-xl">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <i class="fas fa-bolt text-white text-lg"></i>
                 </div>
-                <div id="header-avatar-mini" class="w-7 h-7 bg-purple-500/20 border border-purple-500/30 rounded-full flex items-center justify-center text-[10px] font-bold text-purple-400">?</div>
+                <h1 class="text-xl font-900 font-unbounded tracking-tighter text-white">FACEVO</h1>
+            </div>
+            <div class="flex items-center space-x-3 bg-white/5 px-3 py-1.5 rounded-2xl border border-white/10">
+                <div class="text-right">
+                    <p id="header-nickname" class="text-[10px] font-bold text-white uppercase tracking-tighter">...</p>
+                    <p id="header-elo" class="text-[10px] font-black text-purple-400">0 ELO</p>
+                </div>
+                <div id="header-avatar" class="w-8 h-8 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-[10px] font-bold text-purple-400">?</div>
             </div>
         </header>
 
-        <!-- Main Content Area -->
-        <main class="p-5">
-            <!-- Profile Tab -->
+        <main class="px-6 pt-2">
+            <!-- Профиль -->
             <section id="tab-profile" class="tab-content">
-                <div class="card p-6 mb-6 purple-glow">
-                    <div class="flex items-center space-x-5 mb-8">
-                        <div id="profile-avatar" class="w-20 h-20 btn-primary rounded-3xl flex items-center justify-center text-3xl font-black text-white shadow-xl rotate-3">?</div>
-                        <div class="space-y-1">
-                            <h2 id="profile-nickname" class="text-2xl font-black tracking-tight text-white">...</h2>
-                            <div class="flex items-center space-x-2">
-                                <span class="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] font-bold rounded-md uppercase tracking-widest">PRO PLAYER</span>
-                                <p id="profile-gameid" class="text-zinc-500 text-xs font-medium">ID: ...</p>
-                            </div>
-                        </div>
-                    </div>
+                <div class="glass-card p-6 mb-6 relative overflow-hidden">
+                    <div class="absolute -top-10 -right-10 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl"></div>
                     
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl">
-                            <p class="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-2">ELO Rating</p>
-                            <div class="flex items-baseline space-x-1">
-                                <p id="profile-elo" class="text-2xl font-black text-white">0</p>
-                                <span class="text-[10px] text-purple-500 font-bold">PTS</span>
+                    <div class="flex items-center space-x-5 mb-8">
+                        <div id="profile-avatar" class="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">?</div>
+                        <div>
+                            <h2 id="profile-nickname" class="text-2xl font-900 font-unbounded text-white tracking-tight uppercase">...</h2>
+                            <div class="flex items-center space-x-2 mt-1">
+                                <span class="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[8px] font-black rounded uppercase tracking-widest border border-purple-500/20">ИГРОК</span>
+                                <p id="profile-gameid" class="text-slate-500 text-[10px] font-bold">ID: ...</p>
                             </div>
-                        </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl">
-                            <p class="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-2">Level</p>
-                            <p id="profile-level" class="text-2xl font-black text-purple-400">0</p>
-                        </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl">
-                            <p class="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-2">Matches</p>
-                            <p id="profile-matches" class="text-2xl font-black text-white">0</p>
-                        </div>
-                        <div class="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl">
-                            <p class="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-2">Victories</p>
-                            <p id="profile-wins" class="text-2xl font-black text-emerald-400">0</p>
                         </div>
                     </div>
 
-                    <button class="w-full mt-6 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-2xl font-bold text-sm transition-all border border-zinc-700">
-                        Edit Profile
-                    </button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">РЕЙТИНГ ELO</p>
+                            <p id="profile-elo" class="text-2xl font-900 font-unbounded text-white">0</p>
+                        </div>
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">УРОВЕНЬ</p>
+                            <p id="profile-level" class="text-2xl font-900 font-unbounded text-purple-400">0</p>
+                        </div>
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">МАТЧИ</p>
+                            <p id="profile-matches" class="text-2xl font-900 font-unbounded text-white">0</p>
+                        </div>
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">ПОБЕДЫ</p>
+                            <p id="profile-wins" class="text-2xl font-900 font-unbounded text-emerald-400">0</p>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="card p-6 border-dashed">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-black text-sm uppercase tracking-widest text-zinc-400">Winrate Performance</h3>
-                        <span id="profile-winrate" class="text-sm font-black text-white">0%</span>
+                <div class="glass-card p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">ПРОЦЕНТ ПОБЕД</p>
+                        <span id="profile-winrate" class="text-xs font-black text-white">0%</span>
                     </div>
-                    <div class="w-full bg-zinc-900 rounded-full h-3 p-0.5 border border-zinc-800">
-                        <div id="winrate-bar" class="btn-primary h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+                    <div class="w-full bg-white/5 rounded-full h-2.5 p-0.5 border border-white/5">
+                        <div id="winrate-bar" class="bg-gradient-to-r from-purple-500 to-indigo-600 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
                     </div>
                 </div>
             </section>
 
-            <!-- Play Tab -->
+            <!-- Играть -->
             <section id="tab-play" class="tab-content hidden">
-                <div class="flex flex-col mb-8">
-                    <h2 class="text-3xl font-black tracking-tighter text-white">BATTLE ARENA</h2>
-                    <p class="text-zinc-500 font-medium">Select your combat mode</p>
+                <div class="mb-8">
+                    <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">АРЕНА</h2>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">Выберите режим боя</p>
                 </div>
-                
+
                 <div class="grid gap-4">
-                    <div class="card p-5 lobby-card cursor-pointer group" onclick="showLobbies('1x1')">
+                    <!-- Режимы -->
+                    <div class="glass-card p-5 cursor-pointer group hover:border-purple-500/30 transition-all" onclick="showLobbies('1x1')">
                         <div class="flex justify-between items-center">
-                            <div class="flex items-center space-x-5">
-                                <div class="w-14 h-14 bg-purple-500/10 text-purple-500 rounded-2xl flex items-center justify-center border border-purple-500/20 group-hover:bg-purple-500 group-hover:text-white transition-all duration-300">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-14 h-14 bg-purple-500/10 text-purple-500 rounded-2xl flex items-center justify-center border border-purple-500/20 group-hover:bg-purple-500 group-hover:text-white transition-all">
                                     <i class="fas fa-crosshairs text-xl"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-black text-lg text-white">DUEL 1v1</h3>
-                                    <p class="text-zinc-500 text-xs font-bold uppercase tracking-wider">Temple • Yard</p>
+                                    <h3 class="font-900 font-unbounded text-sm text-white uppercase">ДУЭЛЬ 1v1</h3>
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Temple • Yard</p>
                                 </div>
                             </div>
-                            <div class="flex flex-col items-end">
-                                <span class="bg-purple-500/20 text-purple-400 text-[10px] font-black px-2 py-1 rounded-md mb-2">LIVE</span>
-                                <i class="fas fa-chevron-right text-zinc-700 group-hover:text-purple-500 transition-colors"></i>
-                            </div>
+                            <i class="fas fa-chevron-right text-slate-700 group-hover:text-purple-500"></i>
                         </div>
                     </div>
 
-                    <div class="card p-5 lobby-card cursor-pointer group" onclick="showLobbies('2x2')">
+                    <div class="glass-card p-5 cursor-pointer group hover:border-indigo-500/30 transition-all" onclick="showLobbies('2x2')">
                         <div class="flex justify-between items-center">
-                            <div class="flex items-center space-x-5">
-                                <div class="w-14 h-14 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center border border-blue-500/20 group-hover:bg-blue-500 group-hover:text-white transition-all duration-300">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-14 h-14 bg-indigo-500/10 text-indigo-500 rounded-2xl flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white transition-all">
                                     <i class="fas fa-user-group text-xl"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-black text-lg text-white">SQUAD 2v2</h3>
-                                    <p class="text-zinc-500 text-xs font-bold uppercase tracking-wider">Sandstone • Zone 9</p>
+                                    <h3 class="font-900 font-unbounded text-sm text-white uppercase">КОМАНДА 2v2</h3>
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Sandstone • Rust</p>
                                 </div>
                             </div>
-                            <div class="flex flex-col items-end">
-                                <span class="bg-blue-500/20 text-blue-400 text-[10px] font-black px-2 py-1 rounded-md mb-2">LIVE</span>
-                                <i class="fas fa-chevron-right text-zinc-700 group-hover:text-blue-500 transition-colors"></i>
-                            </div>
+                            <i class="fas fa-chevron-right text-slate-700 group-hover:text-indigo-500"></i>
                         </div>
                     </div>
 
-                    <div class="card p-5 lobby-card cursor-pointer group" onclick="showLobbies('5x5')">
+                    <div class="glass-card p-5 cursor-pointer group hover:border-emerald-500/30 transition-all" onclick="showLobbies('5x5')">
                         <div class="flex justify-between items-center">
-                            <div class="flex items-center space-x-5">
-                                <div class="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all">
                                     <i class="fas fa-shield-halved text-xl"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-black text-lg text-white">RANKED 5v5</h3>
-                                    <p class="text-zinc-500 text-xs font-bold uppercase tracking-wider">All Maps • Competitive</p>
+                                    <h3 class="font-900 font-unbounded text-sm text-white uppercase">РЕЙТИНГ 5v5</h3>
+                                    <p class="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Все карты • Турнир</p>
                                 </div>
                             </div>
-                            <div class="flex flex-col items-end">
-                                <span class="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-1 rounded-md mb-2">LIVE</span>
-                                <i class="fas fa-chevron-right text-zinc-700 group-hover:text-emerald-500 transition-colors"></i>
-                            </div>
+                            <i class="fas fa-chevron-right text-slate-700 group-hover:text-emerald-500"></i>
                         </div>
                     </div>
                 </div>
 
-                <!-- Lobbies List (Hidden initially) -->
-                <div id="lobbies-list" class="mt-8 hidden animate-in slide-in-from-bottom duration-500">
+                <!-- Список Лобби -->
+                <div id="lobbies-list" class="mt-8 hidden">
                     <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center space-x-2">
-                            <div class="w-2 h-6 bg-purple-500 rounded-full"></div>
-                            <h3 id="current-mode-title" class="text-xl font-black text-white">LOBBY 1x1</h3>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-1.5 h-6 bg-purple-500 rounded-full shadow-[0_0_10px_var(--primary-glow)]"></div>
+                            <h3 id="current-mode-title" class="text-lg font-900 font-unbounded text-white uppercase tracking-tighter">ЛОББИ 1X1</h3>
                         </div>
-                        <button onclick="hideLobbies()" class="w-8 h-8 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
-                            <i class="fas fa-times text-xs"></i>
-                        </button>
+                        <button onclick="hideLobbies()" class="w-8 h-8 bg-white/5 rounded-full flex items-center justify-center text-slate-500"><i class="fas fa-times text-xs"></i></button>
                     </div>
                     <div id="lobbies-container" class="grid gap-3">
-                        <!-- Lobbies will be injected here -->
+                        <!-- Сюда вставляются лобби -->
                     </div>
                 </div>
             </section>
 
-            <!-- Leaderboard Tab -->
+            <!-- Лидеры -->
             <section id="tab-leaderboard" class="tab-content hidden">
-                <div class="flex flex-col mb-8">
-                    <h2 class="text-3xl font-black tracking-tighter text-white">HALL OF FAME</h2>
-                    <p class="text-zinc-500 font-medium">Global top 50 rankings</p>
+                <div class="mb-8">
+                    <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">ТОП-50</h2>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">Лучшие игроки сезона</p>
                 </div>
-                <div class="card overflow-hidden border-zinc-800">
+                <div class="glass-card overflow-hidden">
                     <table class="w-full text-left">
-                        <thead class="bg-zinc-900/50 text-zinc-500 text-[10px] font-black uppercase tracking-widest border-b border-zinc-800">
+                        <thead class="bg-white/5 text-slate-500 text-[8px] font-black uppercase tracking-[0.2em] border-b border-white/5">
                             <tr>
-                                <th class="p-4 w-16">Rank</th>
-                                <th class="p-4">Competitor</th>
+                                <th class="p-4 w-12">РАНГ</th>
+                                <th class="p-4">ИГРОК</th>
                                 <th class="p-4 text-right">ELO</th>
                             </tr>
                         </thead>
-                        <tbody id="leaderboard-body" class="divide-y divide-zinc-800/50">
-                            <!-- Leaderboard items will be injected here -->
+                        <tbody id="leaderboard-body" class="divide-y divide-white/5">
+                            <!-- Лидеры -->
                         </tbody>
                     </table>
                 </div>
             </section>
 
-            <!-- Rules Tab -->
+            <!-- Правила -->
             <section id="tab-rules" class="tab-content hidden">
-                <div class="flex flex-col mb-8">
-                    <h2 class="text-3xl font-black tracking-tighter text-white">HANDBOOK</h2>
-                    <p class="text-zinc-500 font-medium">Rules of engagement</p>
+                <div class="mb-8">
+                    <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">ИНФО</h2>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">Правила и регламент</p>
                 </div>
                 <div class="space-y-4">
-                    <div class="card p-6 border-l-4 border-l-purple-500">
-                        <h3 class="font-black text-white uppercase tracking-tight mb-2">Fair Play</h3>
-                        <p class="text-zinc-500 text-sm font-medium leading-relaxed">Official Standoff 2 app only. Use of cheats, scripts, or third-party modifications results in an immediate permanent ban.</p>
+                    <div class="glass-card p-6 border-l-4 border-l-purple-500">
+                        <h3 class="font-900 font-unbounded text-xs text-white uppercase mb-2 tracking-widest">Честная игра</h3>
+                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Используйте только официальное приложение Standoff 2. Чит-программы и скрипты = вечный бан без возврата средств.</p>
                     </div>
-                    <div class="card p-6 border-l-4 border-l-zinc-700">
-                        <h3 class="font-black text-white uppercase tracking-tight mb-2">Match Protocol</h3>
-                        <p class="text-zinc-500 text-sm font-medium leading-relaxed">Submit result screenshots immediately. 10-minute grace period for arrival before technical defeat.</p>
+                    <div class="glass-card p-6 border-l-4 border-l-slate-700">
+                        <h3 class="font-900 font-unbounded text-xs text-white uppercase mb-2 tracking-widest">Протокол матча</h3>
+                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Скриншот результата обязателен сразу после игры. Опоздание более чем на 10 минут - тех. поражение.</p>
                     </div>
-                    <div class="card p-6 border-l-4 border-l-purple-900">
-                        <h3 class="font-black text-white uppercase tracking-tight mb-2">Ranking System</h3>
-                        <p class="text-zinc-500 text-sm font-medium leading-relaxed">ELO fluctuations depend on opponent difficulty. Win range: +15 to +35. Loss range: -10 to -30.</p>
+                    <div class="glass-card p-6 border-l-4 border-l-rose-500">
+                        <h3 class="font-900 font-unbounded text-xs text-white uppercase mb-2 tracking-widest">Рейтинг</h3>
+                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Начисление очков зависит от ELO противника. Средний прирост за победу: +25 очков.</p>
                     </div>
                 </div>
             </section>
         </main>
 
-        <!-- Bottom Navigation -->
-        <nav class="fixed bottom-0 left-0 right-0 bg-zinc-950/80 backdrop-blur-xl border-t border-zinc-800/50 flex justify-around px-4 pb-8 pt-2 z-40">
-            <button onclick="showTab('profile')" id="nav-profile" class="nav-item active-tab">
-                <i class="fas fa-ghost"></i>
-                <span>PROFILE</span>
+        <!-- Навигация -->
+        <nav class="fixed bottom-6 left-6 right-6 h-16 glass-card border border-white/10 flex justify-around items-center px-4 z-50">
+            <button onclick="showTab('profile')" id="nav-profile" class="nav-item flex flex-col items-center nav-active">
+                <i class="fas fa-user-ninja text-lg"></i>
+                <span class="text-[8px] font-black uppercase tracking-widest mt-1">ПРОФИЛЬ</span>
             </button>
-            <button onclick="showTab('play')" id="nav-play" class="nav-item text-zinc-600">
-                <i class="fas fa-gamepad"></i>
-                <span>ARENA</span>
+            <button onclick="showTab('play')" id="nav-play" class="nav-item flex flex-col items-center text-slate-600">
+                <i class="fas fa-gamepad text-lg"></i>
+                <span class="text-[8px] font-black uppercase tracking-widest mt-1">АРЕНА</span>
             </button>
-            <button onclick="showTab('leaderboard')" id="nav-leaderboard" class="nav-item text-zinc-600">
-                <i class="fas fa-crown"></i>
-                <span>HALL</span>
+            <button onclick="showTab('leaderboard')" id="nav-leaderboard" class="nav-item flex flex-col items-center text-slate-600">
+                <i class="fas fa-crown text-lg"></i>
+                <span class="text-[8px] font-black uppercase tracking-widest mt-1">ЛИДЕРЫ</span>
             </button>
-            <button onclick="showTab('rules')" id="nav-rules" class="nav-item text-zinc-600">
-                <i class="fas fa-shield"></i>
-                <span>CODE</span>
+            <button onclick="showTab('rules')" id="nav-rules" class="nav-item flex flex-col items-center text-slate-600">
+                <i class="fas fa-shield-halved text-lg"></i>
+                <span class="text-[8px] font-black uppercase tracking-widest mt-1">КОДЕКС</span>
             </button>
         </nav>
     </div>
@@ -315,13 +318,18 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
-        
-        // Apply purple theme to header
-        tg.setHeaderColor('#09090b');
+        tg.setHeaderColor('#050505');
+        tg.setBackgroundColor('#050505');
 
         const userId = tg.initDataUnsafe?.user?.id || 1562788488;
-        
         let userData = null;
+        let currentLobbiesData = null;
+        let currentOpenMode = null;
+
+        async function fetchAllData() {
+            await fetchUserData();
+            await fetchLobbies();
+        }
 
         async function fetchUserData() {
             try {
@@ -330,133 +338,92 @@
                     userData = await response.json();
                     updateProfileUI();
                 }
-            } catch (e) {
-                console.error("Failed to fetch user data", e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         function updateProfileUI() {
             if (!userData) return;
-            
-            document.getElementById('header-nickname').innerText = userData.nickname.toUpperCase();
+            const nick = userData.nickname.toUpperCase();
+            document.getElementById('header-nickname').innerText = nick;
             document.getElementById('header-elo').innerText = `${userData.elo} ELO`;
-            document.getElementById('header-avatar-mini').innerText = userData.nickname.charAt(0).toUpperCase();
+            document.getElementById('header-avatar').innerText = nick.charAt(0);
             
-            document.getElementById('profile-nickname').innerText = userData.nickname.toUpperCase();
+            document.getElementById('profile-nickname').innerText = nick;
             document.getElementById('profile-gameid').innerText = `ID: ${userData.game_id}`;
             document.getElementById('profile-elo').innerText = userData.elo;
             document.getElementById('profile-level').innerText = userData.level;
             document.getElementById('profile-matches').innerText = userData.matches;
             document.getElementById('profile-wins').innerText = userData.wins;
-            document.getElementById('profile-avatar').innerText = userData.nickname.charAt(0).toUpperCase();
+            document.getElementById('profile-avatar').innerText = nick.charAt(0);
             
             const winrate = userData.matches > 0 ? Math.round((userData.wins / userData.matches) * 100) : 0;
             document.getElementById('profile-winrate').innerText = `${winrate}%`;
             document.getElementById('winrate-bar').style.width = `${winrate}%`;
         }
 
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-            
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active-tab');
-                item.classList.add('text-zinc-600');
-            });
-            document.getElementById(`nav-${tabId}`).classList.add('active-tab');
-            document.getElementById(`nav-${tabId}`).classList.remove('text-zinc-600');
-
-            tg.HapticFeedback.selectionChanged();
-
-            if (tabId === 'leaderboard') fetchLeaderboard();
-            if (tabId === 'play') fetchLobbies();
-        }
-
-        async function fetchLeaderboard() {
-            const tbody = document.getElementById('leaderboard-body');
-            tbody.innerHTML = '<tr><td colspan="3" class="p-10 text-center text-zinc-600 font-bold uppercase tracking-widest text-xs animate-pulse">Scanning Grid...</td></tr>';
-            
-            try {
-                const response = await fetch('/api/leaderboard');
-                const data = await response.json();
-                
-                tbody.innerHTML = '';
-                data.forEach((user, index) => {
-                    const tr = document.createElement('tr');
-                    tr.className = 'group hover:bg-white/5 transition-colors';
-                    
-                    let rankColor = 'text-zinc-500';
-                    if (index === 0) rankColor = 'text-yellow-500';
-                    if (index === 1) rankColor = 'text-zinc-300';
-                    if (index === 2) rankColor = 'text-amber-600';
-
-                    tr.innerHTML = `
-                        <td class="p-4 font-black text-sm ${rankColor}">${index + 1}</td>
-                        <td class="p-4">
-                            <div class="font-black text-white text-sm tracking-tight">${user.nickname.toUpperCase()}</div>
-                            <div class="text-[10px] text-zinc-600 font-bold uppercase tracking-tighter">LEVEL ${user.level}</div>
-                        </td>
-                        <td class="p-4 text-right font-black text-purple-400 text-sm tracking-tighter">${user.elo}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        let lobbiesData = {};
-        let currentOpenMode = null;
-
         async function fetchLobbies() {
             try {
-                const response = await fetch('/api/lobbies');
+                const response = await fetch(`/api/lobbies/${userId}`);
                 if (response.ok) {
-                    lobbiesData = await response.json();
-                    if (currentOpenMode) showLobbies(currentOpenMode);
+                    currentLobbiesData = await response.json();
+                    updateLobbyUI();
                 }
-            } catch (e) {
-                console.error("Failed to fetch lobbies", e);
-            }
+            } catch (e) { console.error(e); }
         }
 
-        function showLobbies(mode) {
-            currentOpenMode = mode;
-            document.getElementById('lobbies-list').classList.remove('hidden');
-            document.getElementById('current-mode-title').innerText = `LOBBY ${mode}`;
+        function updateLobbyUI() {
+            if (!currentLobbiesData) return;
             
+            // Баннер активного лобби
+            const banner = document.getElementById('active-lobby-banner');
+            if (currentLobbiesData.user_lobby) {
+                banner.classList.remove('hidden');
+                document.getElementById('active-lobby-text').innerText = 
+                    `${currentLobbiesData.user_lobby.mode} #${currentLobbiesData.user_lobby.id}`;
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            if (currentOpenMode) renderLobbies(currentOpenMode);
+        }
+
+        function renderLobbies(mode) {
             const container = document.getElementById('lobbies-container');
             container.innerHTML = '';
             
-            const lobbies = lobbiesData[mode] || [];
+            const lobbies = currentLobbiesData.modes[mode] || [];
             
             if (lobbies.length === 0) {
-                container.innerHTML = '<div class="text-center p-8 bg-zinc-900/50 rounded-2xl border border-zinc-800 text-zinc-600 font-bold text-xs uppercase tracking-widest">No active sectors</div>';
+                container.innerHTML = '<div class="text-center p-10 glass-card text-slate-500 font-bold uppercase text-[10px] tracking-widest">Сектор пуст</div>';
                 return;
             }
 
             lobbies.forEach(lobby => {
                 const div = document.createElement('div');
-                div.className = 'bg-zinc-900 border border-zinc-800 p-4 rounded-2xl flex justify-between items-center group hover:border-purple-500/50 transition-all';
+                const isFull = lobby.players >= lobby.max && !lobby.is_user_here;
+                const userInOtherLobby = currentLobbiesData.user_lobby && !lobby.is_user_here;
                 
-                const isFull = lobby.players >= lobby.max;
+                div.className = `glass-card p-4 flex justify-between items-center transition-all ${lobby.is_user_here ? 'active-lobby-pulse' : ''}`;
                 
                 div.innerHTML = `
                     <div class="space-y-1">
-                        <span class="font-black text-white text-sm tracking-tight">SECTOR #${lobby.id}</span>
+                        <span class="font-900 font-unbounded text-[10px] text-white uppercase tracking-tighter">СЕКТОР #${lobby.id}</span>
                         <div class="flex items-center space-x-2">
-                            <div class="flex space-x-0.5">
-                                ${Array(lobby.max).fill(0).map((_, i) => `<div class="w-1.5 h-1.5 rounded-full ${i < lobby.players ? 'bg-purple-500' : 'bg-zinc-800'}"></div>`).join('')}
+                            <div class="flex space-x-1">
+                                ${Array(lobby.max).fill(0).map((_, i) => 
+                                    `<div class="w-1.5 h-1.5 rounded-full ${i < lobby.players ? 'bg-purple-500' : 'bg-white/10'}"></div>`
+                                ).join('')}
                             </div>
-                            <span class="text-[10px] text-zinc-600 font-bold uppercase">${lobby.players}/${lobby.max} UNITS</span>
+                            <span class="text-[8px] text-slate-500 font-black uppercase">${lobby.players}/${lobby.max} ЮНИТОВ</span>
                         </div>
                     </div>
                     <button 
                         onclick="toggleLobby('${mode}', ${lobby.id})"
-                        class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isFull ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'btn-primary text-white'}"
-                        ${isFull ? 'disabled' : ''}
+                        class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all 
+                        ${lobby.is_user_here ? 'btn-leave' : (isFull || userInOtherLobby ? 'bg-white/5 text-slate-600 cursor-not-allowed' : 'btn-action text-white shadow-lg shadow-purple-500/20')}"
+                        ${isFull || userInOtherLobby ? 'disabled' : ''}
                     >
-                        ${isFull ? 'LOCK' : 'ENGAGE'}
+                        ${lobby.is_user_here ? 'ВЫЙТИ' : 'ЗАЙТИ'}
                     </button>
                 `;
                 container.appendChild(div);
@@ -468,29 +435,72 @@
                 const response = await fetch('/api/lobby/enter', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        mode: mode,
-                        lobby_id: lobbyId
-                    })
+                    body: JSON.stringify({ user_id: userId, mode: mode, lobby_id: lobbyId })
                 });
                 
                 const result = await response.json();
                 if (result.status === 'success') {
                     tg.HapticFeedback.notificationOccurred(result.action === 'joined' ? 'success' : 'warning');
-                    fetchLobbies();
-                    if (result.action === 'joined') {
-                        tg.showAlert(`Unit deployed to Sector #${lobbyId}!`);
-                    } else {
-                        tg.showAlert(`Unit extracted from Sector #${lobbyId}`);
-                    }
+                    await fetchLobbies();
                 } else {
-                    tg.showAlert(result.message || 'Transmission failed');
+                    tg.showAlert(result.message);
                 }
-            } catch (e) {
-                console.error(e);
-                tg.showAlert('Network instability detected');
-            }
+            } catch (e) { tg.showAlert('Ошибка сети'); }
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('nav-active');
+                item.classList.add('text-slate-600');
+            });
+            document.getElementById(`nav-${tabId}`).classList.add('nav-active');
+            document.getElementById(`nav-${tabId}`).classList.remove('text-slate-600');
+
+            tg.HapticFeedback.selectionChanged();
+
+            if (tabId === 'leaderboard') fetchLeaderboard();
+            if (tabId === 'play') fetchLobbies();
+        }
+
+        async function fetchLeaderboard() {
+            const tbody = document.getElementById('leaderboard-body');
+            tbody.innerHTML = '<tr><td colspan="3" class="p-12 text-center text-slate-600 font-black uppercase text-[8px] tracking-[0.3em] animate-pulse">СИНХРОНИЗАЦИЯ...</td></tr>';
+            
+            try {
+                const response = await fetch('/api/leaderboard');
+                const data = await response.json();
+                
+                tbody.innerHTML = '';
+                data.forEach((user, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'group hover:bg-white/5 transition-colors';
+                    let rankColor = 'text-slate-500';
+                    if (index === 0) rankColor = 'text-yellow-500';
+                    else if (index === 1) rankColor = 'text-slate-300';
+                    else if (index === 2) rankColor = 'text-amber-600';
+
+                    tr.innerHTML = `
+                        <td class="p-4 font-black text-xs ${rankColor}">${index + 1}</td>
+                        <td class="p-4">
+                            <div class="font-black text-white text-[10px] tracking-tight uppercase">${user.nickname}</div>
+                            <div class="text-[8px] text-slate-600 font-bold uppercase tracking-tighter">LVL ${user.level}</div>
+                        </td>
+                        <td class="p-4 text-right font-black text-purple-400 text-xs tracking-tighter">${user.elo}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        function showLobbies(mode) {
+            currentOpenMode = mode;
+            document.getElementById('lobbies-list').classList.remove('hidden');
+            document.getElementById('current-mode-title').innerText = `ЛОББИ ${mode}`;
+            renderLobbies(mode);
+            window.scrollTo({ top: document.getElementById('lobbies-list').offsetTop - 100, behavior: 'smooth' });
         }
 
         function hideLobbies() {
@@ -499,9 +509,9 @@
             tg.HapticFeedback.impactOccurred('light');
         }
 
-        // Initial load
-        fetchUserData();
-        setInterval(fetchLobbies, 5000); // Auto refresh lobbies
+        // Запуск
+        fetchAllData();
+        setInterval(fetchLobbies, 3000);
     </script>
 </body>
 </html>
