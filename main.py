@@ -170,18 +170,12 @@ class AdminAction(StatesGroup):
     waiting_for_stats_change = State()
 
 def main_menu_keyboard(user_id=None):
+    # Оставляем только одну кнопку для Mini App
     builder = ReplyKeyboardBuilder()
-    # Кнопка для запуска Mini App
     builder.row(types.KeyboardButton(
         text="Открыть Mini App 📱", 
-        web_app=types.WebAppInfo(url="https://miniapp-evo-production.up.railway.app") # Замените после деплоя
+        web_app=types.WebAppInfo(url="https://ВАШ-ПРОЕКТ.up.railway.app/") # Замените на вашу ссылку
     ))
-    builder.row(types.KeyboardButton(text="Профиль 👤"))
-    builder.row(types.KeyboardButton(text="Поиск матча 🔍"))
-    builder.row(types.KeyboardButton(text="Список лидеров 🏆"), types.KeyboardButton(text="Правила 📖"))
-    builder.row(types.KeyboardButton(text="Настройки ⚙️"), types.KeyboardButton(text="Поддержка 🛠️"))
-    if user_id in ADMINS:
-        builder.row(types.KeyboardButton(text="Админ-панель 👑"))
     return builder.as_markup(resize_keyboard=True, persistent=True)
 
 def get_lobby_keyboard(user_id, mode, lobby_id):
