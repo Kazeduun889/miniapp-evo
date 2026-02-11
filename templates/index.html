@@ -217,7 +217,7 @@
                         <div class="flex justify-between items-center">
                             <div class="flex items-center space-x-4">
                                 <div class="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all">
-                                    <i class="fas fa-users-viewfinder text-xl"></i>
+                                    <i class="fas fa-users-rectangle text-xl"></i>
                                 </div>
                                 <div>
                                     <h3 class="font-900 font-unbounded text-sm text-white uppercase">РЕЙТИНГ 5v5</h3>
@@ -440,7 +440,7 @@
             const lobbies = currentLobbiesData.modes[mode] || [];
             
             if (lobbies.length === 0) {
-                container.innerHTML = '<div class="text-center p-10 glass-card text-slate-500 font-bold uppercase text-[10px] tracking-widest">Сектор пуст</div>';
+                container.innerHTML = '<div class="text-center p-10 glass-card text-slate-500 font-bold uppercase text-[10px] tracking-widest">Лобби пусто</div>';
                 return;
             }
 
@@ -453,7 +453,7 @@
                 
                 div.innerHTML = `
                     <div class="space-y-1">
-                        <span class="font-900 font-unbounded text-[10px] text-white uppercase tracking-tighter">СЕКТОР #${lobby.id}</span>
+                        <span class="font-900 font-unbounded text-[10px] text-white uppercase tracking-tighter">ЛОББИ #${lobby.id}</span>
                         <div class="flex items-center space-x-2">
                             <div class="flex space-x-1">
                                 ${Array(lobby.max).fill(0).map((_, i) => 

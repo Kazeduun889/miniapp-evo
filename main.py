@@ -24,23 +24,22 @@ app = fastapi_app
 # Загрузка переменных окружения
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN_2 = os.getenv("BOT_TOKEN_2") # Токен второго бота
+
 ADMINS = [1562788488, 8565678796] # Замените на реальные ID админов
-CHANNEL_URL = "https://t.me/officialWizzi" # Вставьте вашу ссылку на ПЕРВЫЙ канал
-CHANNEL_ID = "@officialWizzi" # Вставьте ID ПЕРВОГО канала
-CHANNEL_URL_2 = "https://t.me/Tournament_Evo" # Вставьте вашу ссылку на ВТОРОЙ канал
-CHANNEL_ID_2 = "@Tournament_Evo" # Вставьте ID ВТОРОГО канала
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
-
-# Инициализация бота и диспетчера
+# Инициализация ботов
 bot = Bot(token=BOT_TOKEN)
+bot2 = Bot(token=BOT_TOKEN_2) if BOT_TOKEN_2 else None
+
 dp = Dispatcher(storage=MemoryStorage())
+dp2 = Dispatcher(storage=MemoryStorage()) if bot2 else None
 
 async def main():
     db.init_db()
     
     # Восстановление состояния лобби из БД при запуске
+    import state
     lobby_members = db.get_all_lobby_members()
     for uid, mode, lid in lobby_members:
         user = db.get_user(uid)
@@ -52,16 +51,21 @@ async def main():
                 "game_id": user[0]
             }
     
-    # Запуск бота и FastAPI сервера параллельно
-    # Render передает PORT через переменную окружения
+    # Запуск ботов и FastAPI сервера параллельно
     port = int(os.environ.get("PORT", 8000))
     config = uvicorn.Config(fastapi_app, host="0.0.0.0", port=port, loop="asyncio")
     server = uvicorn.Server(config)
     
-    await asyncio.gather(
+    tasks = [
         dp.start_polling(bot),
         server.serve()
-    )
+    ]
+    
+    if dp2 and bot2:
+        logging.info("Запуск второго бота для синхронизации...")
+        tasks.append(dp2.start_polling(bot2))
+        
+    await asyncio.gather(*tasks)
 
 class SubscriptionMiddleware(BaseMiddleware):
     async def __call__(
@@ -134,6 +138,12 @@ dp.message.middleware(SubscriptionMiddleware())
 dp.callback_query.middleware(SubscriptionMiddleware())
 dp.message.middleware(MenuMiddleware())
 
+# Регистрация мидлварей для второго бота
+if dp2:
+    dp2.message.middleware(SubscriptionMiddleware())
+    dp2.callback_query.middleware(SubscriptionMiddleware())
+    dp2.message.middleware(MenuMiddleware())
+
 import state
 
 # Глобальные состояния теперь в state.py
@@ -171,6 +181,25 @@ class AdminAction(StatesGroup):
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
+    await process_start(message)
+
+# Если есть второй бот, вешаем тот же обработчик
+if dp2:
+    @dp2.message(Command("start"))
+    async def start_command_2(message: types.Message):
+        await process_start(message)
+
+    # Обработка текстовых сообщений (для текстового чат-бота)
+    @dp2.message(F.text == "Играть в Yoda Faceit 🎮")
+    async def play_text_command(message: types.Message):
+        await process_start(message)
+
+    # Можно добавить другие команды, которые будут работать в обоих ботах
+    @dp2.message(Command("help"))
+    async def help_command_2(message: types.Message):
+        await message.answer("Этот бот поможет вам войти в игру Yoda Faceit. Просто нажмите кнопку ниже!")
+
+async def process_start(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
     
