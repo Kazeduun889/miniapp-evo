@@ -158,16 +158,20 @@
                     <button onclick="sendSupport()" class="w-full btn-action py-4 rounded-2xl text-white font-900 font-unbounded text-[10px] tracking-widest uppercase shadow-lg shadow-purple-500/20">ОТПРАВИТЬ</button>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <a href="https://t.me/your_admin" class="glass-card p-5 flex flex-col items-center justify-center space-y-3">
-                        <i class="fab fa-telegram text-2xl text-sky-400"></i>
-                        <span class="text-[8px] font-black uppercase tracking-widest text-white">АДМИН</span>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <a href="https://t.me/S9yhWxW" class="glass-card p-5 flex flex-col items-center justify-center space-y-3">
+                        <i class="fas fa-user-shield text-2xl text-purple-400"></i>
+                        <span class="text-[8px] font-black uppercase tracking-widest text-white">АДМИН 1</span>
                     </a>
-                    <a href="https://t.me/your_chat" class="glass-card p-5 flex flex-col items-center justify-center space-y-3">
-                        <i class="fas fa-users text-2xl text-purple-400"></i>
-                        <span class="text-[8px] font-black uppercase tracking-widest text-white">ЧАТ ИГРОКОВ</span>
+                    <a href="https://t.me/yoosome" class="glass-card p-5 flex flex-col items-center justify-center space-y-3">
+                        <i class="fas fa-user-shield text-2xl text-purple-400"></i>
+                        <span class="text-[8px] font-black uppercase tracking-widest text-white">АДМИН 2</span>
                     </a>
                 </div>
+                <a href="https://t.me/officialWizzi" class="glass-card p-5 flex items-center justify-center space-x-4 w-full">
+                    <i class="fab fa-telegram text-2xl text-sky-400"></i>
+                    <span class="text-[8px] font-black uppercase tracking-widest text-white">НАШ КАНАЛ</span>
+                </a>
             </section>
 
             <!-- Лидеры -->
@@ -213,7 +217,7 @@
                         <div class="flex justify-between items-center">
                             <div class="flex items-center space-x-4">
                                 <div class="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all">
-                                    <i class="fas fa-shield-halved text-xl"></i>
+                                    <i class="fas fa-users-viewfinder text-xl"></i>
                                 </div>
                                 <div>
                                     <h3 class="font-900 font-unbounded text-sm text-white uppercase">РЕЙТИНГ 5v5</h3>
@@ -456,7 +460,7 @@
                                     `<div class="w-1.5 h-1.5 rounded-full ${i < lobby.players ? 'bg-purple-500' : 'bg-white/10'}"></div>`
                                 ).join('')}
                             </div>
-                            <span class="text-[8px] text-slate-500 font-black uppercase">${lobby.players}/${lobby.max} ЮНИТОВ</span>
+                            <span class="text-[8px] text-slate-500 font-black uppercase">${lobby.players}/${lobby.max} ИГРОКОВ</span>
                         </div>
                     </div>
                     <button 

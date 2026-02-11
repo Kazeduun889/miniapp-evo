@@ -169,12 +169,32 @@ class AdminAction(StatesGroup):
     waiting_for_elo_change = State()
     waiting_for_stats_change = State()
 
+@dp.message(Command("start"))
+async def start_command(message: types.Message):
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+    
+    # Регистрация в общей БД, если пользователя еще нет
+    if not db.get_user(user_id):
+        db.register_user(user_id, username)
+        logging.info(f"Новый пользователь зарегистрирован: {username} ({user_id})")
+
+    await message.answer(
+        f"Привет, {message.from_user.first_name}! 👋\n\n"
+        "Добро пожаловать в **Yoda Faceit** — лучшую арену для Project Evolution.\n\n"
+        "Жми кнопку ниже, чтобы войти в игру!",
+        reply_markup=main_menu_keyboard(user_id)
+    )
+
 def main_menu_keyboard(user_id=None):
-    # Оставляем только одну кнопку для Mini App
+    # Единственная кнопка для бесшовного перехода в Mini App
     builder = ReplyKeyboardBuilder()
+    # В идеале здесь должна быть ваша ссылка на Railway
+    mini_app_url = os.getenv("MINI_APP_URL", "https://ВАШ-ПРОЕКТ.up.railway.app/")
+    
     builder.row(types.KeyboardButton(
-        text="Открыть Mini App 📱", 
-        web_app=types.WebAppInfo(url="https://ВАШ-ПРОЕКТ.up.railway.app/") # Замените на вашу ссылку
+        text="Играть в Yoda Faceit 🎮", 
+        web_app=types.WebAppInfo(url=mini_app_url)
     ))
     return builder.as_markup(resize_keyboard=True, persistent=True)
 
@@ -241,7 +261,7 @@ async def update_all_lobby_messages(mode, lobby_id):
     else: # 5x5
         max_p = 10
         
-    status_text = f"📍 Режим: {mode} | Лобби №{lobby_id} ({len(players_in_lobby)}/{max_p})\n\nСписок игроков 💻📱:\n"
+    status_text = f"📍 Режим: {mode} | Лобби №{lobby_id} ({len(players_in_lobby)}/{max_p})\n\nСписок игроков 🎮:\n"
     
     if not players_in_lobby:
         status_text += "Пусто..."
