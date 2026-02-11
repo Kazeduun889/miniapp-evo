@@ -174,7 +174,7 @@ def main_menu_keyboard(user_id=None):
     # Кнопка для запуска Mini App
     builder.row(types.KeyboardButton(
         text="Открыть Mini App 📱", 
-        web_app=types.WebAppInfo(url="https://ВАШ-ПРОЕКТ.onrender.com/") # Замените после деплоя
+        web_app=types.WebAppInfo(url="https://miniapp-evo-production.up.railway.app") # Замените после деплоя
     ))
     builder.row(types.KeyboardButton(text="Профиль 👤"))
     builder.row(types.KeyboardButton(text="Поиск матча 🔍"))
