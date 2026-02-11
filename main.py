@@ -18,6 +18,9 @@ from typing import Callable, Dict, Any, Awaitable
 import db
 from app import app as fastapi_app
 
+# Для Railway и других платформ, которые ищут переменную 'app'
+app = fastapi_app
+
 # Загрузка переменных окружения
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
