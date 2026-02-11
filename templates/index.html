@@ -10,14 +10,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-deep: #050505;
-            --bg-card: #0f0f12;
+            --bg-deep: #030305;
+            --bg-card: #0d0d12;
+            --bg-card-hover: #16161e;
             --primary: #a855f7;
-            --primary-glow: rgba(168, 85, 247, 0.4);
+            --primary-glow: rgba(168, 85, 247, 0.5);
             --secondary: #6366f1;
             --text-main: #ffffff;
-            --text-dim: #94a3b8;
+            --text-dim: #a1a1aa;
+            --text-muted: #71717a;
             --accent: #f43f5e;
+            --border: rgba(255, 255, 255, 0.1);
         }
 
         body {
@@ -30,17 +33,18 @@
 
         .font-unbounded { font-family: 'Unbounded', sans-serif; }
 
-        .tg-theme {
-            background-color: var(--tg-theme-bg-color, var(--bg-deep));
-            color: var(--tg-theme-text-color, var(--text-main));
+        /* Контрастные карточки */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
         }
 
-        /* Glassmorphism & Cards */
-        .glass-card {
-            background: rgba(15, 15, 18, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 24px;
+        .glass-card:hover {
+            border-color: rgba(168, 85, 247, 0.3);
+            background: var(--bg-card-hover);
         }
 
         .active-lobby-pulse {
@@ -113,72 +117,60 @@
             </div>
         </div>
 
-        <!-- Header -->
-        <header class="p-6 flex items-center justify-between sticky top-0 z-40 bg-black/50 backdrop-blur-xl">
+        <header class="p-6 flex items-center justify-between sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/5">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-                    <i class="fas fa-bolt text-white text-lg"></i>
+                <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/40">
+                    <i class="fas fa-jedi text-white text-lg"></i>
                 </div>
-                <h1 class="text-xl font-900 font-unbounded tracking-tighter text-white">FACEVO</h1>
+                <div>
+                    <h1 class="text-xs font-900 font-unbounded tracking-tighter text-purple-400 uppercase leading-none">Yoda</h1>
+                    <h1 class="text-lg font-900 font-unbounded tracking-tighter text-white uppercase leading-none">Faceit</h1>
+                </div>
             </div>
-            <div class="flex items-center space-x-3 bg-white/5 px-3 py-1.5 rounded-2xl border border-white/10">
+            <div onclick="showTab('profile')" class="flex items-center space-x-3 bg-white/5 hover:bg-white/10 active:scale-95 transition-all px-3 py-1.5 rounded-2xl border border-white/10 cursor-pointer">
                 <div class="text-right">
                     <p id="header-nickname" class="text-[10px] font-bold text-white uppercase tracking-tighter">...</p>
                     <p id="header-elo" class="text-[10px] font-black text-purple-400">0 ELO</p>
                 </div>
-                <div id="header-avatar" class="w-8 h-8 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-[10px] font-bold text-purple-400">?</div>
+                <div id="header-avatar" class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 border border-purple-400/30 flex items-center justify-center shadow-lg shadow-purple-500/20 text-[10px] font-bold text-white">?</div>
             </div>
         </header>
 
         <main class="px-6 pt-2">
-            <!-- Профиль -->
-            <section id="tab-profile" class="tab-content">
-                <div class="glass-card p-6 mb-6 relative overflow-hidden">
-                    <div class="absolute -top-10 -right-10 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl"></div>
-                    
-                    <div class="flex items-center space-x-5 mb-8">
-                        <div id="profile-avatar" class="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">?</div>
+            <!-- Поддержка -->
+            <section id="tab-support" class="tab-content hidden">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">ПОДДЕРЖКА</h2>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">Вопросы и идеи</p>
+                </div>
+                
+                <div class="glass-card p-6 mb-4">
+                    <div class="flex items-center space-x-4 mb-6">
+                        <div class="w-12 h-12 bg-purple-500/10 rounded-2xl flex items-center justify-center text-purple-500 border border-purple-500/20">
+                            <i class="fas fa-comment-dots text-xl"></i>
+                        </div>
                         <div>
-                            <h2 id="profile-nickname" class="text-2xl font-900 font-unbounded text-white tracking-tight uppercase">...</h2>
-                            <div class="flex items-center space-x-2 mt-1">
-                                <span class="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[8px] font-black rounded uppercase tracking-widest border border-purple-500/20">ИГРОК</span>
-                                <p id="profile-gameid" class="text-slate-500 text-[10px] font-bold">ID: ...</p>
-                            </div>
+                            <h3 class="font-900 font-unbounded text-sm text-white uppercase">ЕСТЬ ИДЕЯ?</h3>
+                            <p class="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Мы ценим ваш фидбек</p>
                         </div>
                     </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="stat-box p-4">
-                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">РЕЙТИНГ ELO</p>
-                            <p id="profile-elo" class="text-2xl font-900 font-unbounded text-white">0</p>
-                        </div>
-                        <div class="stat-box p-4">
-                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">УРОВЕНЬ</p>
-                            <p id="profile-level" class="text-2xl font-900 font-unbounded text-purple-400">0</p>
-                        </div>
-                        <div class="stat-box p-4">
-                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">МАТЧИ</p>
-                            <p id="profile-matches" class="text-2xl font-900 font-unbounded text-white">0</p>
-                        </div>
-                        <div class="stat-box p-4">
-                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">ПОБЕДЫ</p>
-                            <p id="profile-wins" class="text-2xl font-900 font-unbounded text-emerald-400">0</p>
-                        </div>
-                    </div>
+                    <textarea id="support-text" class="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white text-xs font-medium placeholder:text-slate-600 focus:outline-none focus:border-purple-500/50 mb-4" rows="4" placeholder="Опишите вашу идею или проблему..."></textarea>
+                    <button onclick="sendSupport()" class="w-full btn-action py-4 rounded-2xl text-white font-900 font-unbounded text-[10px] tracking-widest uppercase shadow-lg shadow-purple-500/20">ОТПРАВИТЬ</button>
                 </div>
 
-                <div class="glass-card p-5">
-                    <div class="flex justify-between items-center mb-3">
-                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">ПРОЦЕНТ ПОБЕД</p>
-                        <span id="profile-winrate" class="text-xs font-black text-white">0%</span>
-                    </div>
-                    <div class="w-full bg-white/5 rounded-full h-2.5 p-0.5 border border-white/5">
-                        <div id="winrate-bar" class="bg-gradient-to-r from-purple-500 to-indigo-600 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
-                    </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <a href="https://t.me/your_admin" class="glass-card p-5 flex flex-col items-center justify-center space-y-3">
+                        <i class="fab fa-telegram text-2xl text-sky-400"></i>
+                        <span class="text-[8px] font-black uppercase tracking-widest text-white">АДМИН</span>
+                    </a>
+                    <a href="https://t.me/your_chat" class="glass-card p-5 flex flex-col items-center justify-center space-y-3">
+                        <i class="fas fa-users text-2xl text-purple-400"></i>
+                        <span class="text-[8px] font-black uppercase tracking-widest text-white">ЧАТ ИГРОКОВ</span>
+                    </a>
                 </div>
             </section>
 
-            <!-- Играть -->
+            <!-- Лидеры -->
             <section id="tab-play" class="tab-content hidden">
                 <div class="mb-8">
                     <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">АРЕНА</h2>
@@ -270,20 +262,70 @@
                 </div>
             </section>
 
+            <!-- Профиль -->
+            <section id="tab-profile" class="tab-content hidden">
+                <div class="glass-card p-6 mb-6 relative overflow-hidden">
+                    <div class="absolute -top-10 -right-10 w-40 h-40 bg-purple-600/10 rounded-full blur-3xl"></div>
+                    
+                    <div class="flex items-center space-x-5 mb-8">
+                        <div id="profile-avatar" class="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-3xl flex items-center justify-center text-3xl font-black text-white shadow-2xl">?</div>
+                        <div>
+                            <h2 id="profile-nickname" class="text-2xl font-900 font-unbounded text-white tracking-tight uppercase">...</h2>
+                            <div class="flex items-center space-x-2 mt-1">
+                                <span class="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[8px] font-black rounded uppercase tracking-widest border border-purple-500/20">ИГРОК</span>
+                                <p id="profile-gameid" class="text-slate-500 text-[10px] font-bold">ID: ...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">РЕЙТИНГ ELO</p>
+                            <p id="profile-elo" class="text-2xl font-900 font-unbounded text-white">0</p>
+                        </div>
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">УРОВЕНЬ</p>
+                            <p id="profile-level" class="text-2xl font-900 font-unbounded text-purple-400">0</p>
+                        </div>
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">МАТЧИ</p>
+                            <p id="profile-matches" class="text-2xl font-900 font-unbounded text-white">0</p>
+                        </div>
+                        <div class="stat-box p-4">
+                            <p class="text-slate-500 text-[8px] font-black uppercase tracking-widest mb-1">ПОБЕДЫ</p>
+                            <p id="profile-wins" class="text-2xl font-900 font-unbounded text-emerald-400">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5">
+                    <div class="flex justify-between items-center mb-3">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">ПРОЦЕНТ ПОБЕД</p>
+                        <span id="profile-winrate" class="text-xs font-black text-white">0%</span>
+                    </div>
+                    <div class="w-full bg-white/5 rounded-full h-2.5 p-0.5 border border-white/5">
+                        <div id="winrate-bar" class="bg-gradient-to-r from-purple-500 to-indigo-600 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Правила -->
             <section id="tab-rules" class="tab-content hidden">
                 <div class="mb-8">
-                    <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">ИНФО</h2>
-                    <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">Правила и регламент</p>
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-book-open text-purple-500 text-2xl"></i>
+                        <h2 class="text-3xl font-900 font-unbounded tracking-tighter text-white uppercase">ПРАВИЛА</h2>
+                    </div>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">Регламент Yoda Faceit</p>
                 </div>
                 <div class="space-y-4">
                     <div class="glass-card p-6 border-l-4 border-l-purple-500">
                         <h3 class="font-900 font-unbounded text-xs text-white uppercase mb-2 tracking-widest">Честная игра</h3>
-                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Используйте только официальное приложение Standoff 2. Чит-программы и скрипты = вечный бан без возврата средств.</p>
+                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Используйте только Project Evolution. Чит-программы и любые сторонние скрипты строго запрещены.</p>
                     </div>
-                    <div class="glass-card p-6 border-l-4 border-l-slate-700">
+                    <div class="glass-card p-6 border-l-4 border-l-indigo-500">
                         <h3 class="font-900 font-unbounded text-xs text-white uppercase mb-2 tracking-widest">Протокол матча</h3>
-                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Скриншот результата обязателен сразу после игры. Опоздание более чем на 10 минут - тех. поражение.</p>
+                        <p class="text-slate-400 text-[10px] font-medium leading-relaxed uppercase">Скриншот результата обязателен сразу после игры. Ограничений на время загрузки нет, но без него победа не будет засчитана.</p>
                     </div>
                     <div class="glass-card p-6 border-l-4 border-l-rose-500">
                         <h3 class="font-900 font-unbounded text-xs text-white uppercase mb-2 tracking-widest">Рейтинг</h3>
@@ -295,9 +337,9 @@
 
         <!-- Навигация -->
         <nav class="fixed bottom-6 left-6 right-6 h-16 glass-card border border-white/10 flex justify-around items-center px-4 z-50">
-            <button onclick="showTab('profile')" id="nav-profile" class="nav-item flex flex-col items-center nav-active">
-                <i class="fas fa-user-ninja text-lg"></i>
-                <span class="text-[8px] font-black uppercase tracking-widest mt-1">ПРОФИЛЬ</span>
+            <button onclick="showTab('support')" id="nav-support" class="nav-item flex flex-col items-center nav-active">
+                <i class="fas fa-headset text-lg"></i>
+                <span class="text-[8px] font-black uppercase tracking-widest mt-1">ПОМОЩЬ</span>
             </button>
             <button onclick="showTab('play')" id="nav-play" class="nav-item flex flex-col items-center text-slate-600">
                 <i class="fas fa-gamepad text-lg"></i>
@@ -308,8 +350,8 @@
                 <span class="text-[8px] font-black uppercase tracking-widest mt-1">ЛИДЕРЫ</span>
             </button>
             <button onclick="showTab('rules')" id="nav-rules" class="nav-item flex flex-col items-center text-slate-600">
-                <i class="fas fa-shield-halved text-lg"></i>
-                <span class="text-[8px] font-black uppercase tracking-widest mt-1">КОДЕКС</span>
+                <i class="fas fa-book-open text-lg"></i>
+                <span class="text-[8px] font-black uppercase tracking-widest mt-1">ПРАВИЛА</span>
             </button>
         </nav>
     </div>
@@ -450,19 +492,39 @@
 
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            if (targetTab) targetTab.classList.remove('hidden');
             
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('nav-active');
                 item.classList.add('text-slate-600');
             });
-            document.getElementById(`nav-${tabId}`).classList.add('nav-active');
-            document.getElementById(`nav-${tabId}`).classList.remove('text-slate-600');
+            
+            const navBtn = document.getElementById(`nav-${tabId}`);
+            if (navBtn) {
+                navBtn.classList.add('nav-active');
+                navBtn.classList.remove('text-slate-600');
+            }
 
             tg.HapticFeedback.selectionChanged();
 
             if (tabId === 'leaderboard') fetchLeaderboard();
             if (tabId === 'play') fetchLobbies();
+        }
+
+        async function sendSupport() {
+            const text = document.getElementById('support-text').value;
+            if (!text.trim()) {
+                tg.showAlert('Пожалуйста, введите текст сообщения');
+                return;
+            }
+            tg.showConfirm('Отправить ваше сообщение поддержке?', (ok) => {
+                if (ok) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                    tg.showAlert('Спасибо! Ваше сообщение отправлено администрации.');
+                    document.getElementById('support-text').value = '';
+                }
+            });
         }
 
         async function fetchLeaderboard() {
@@ -511,6 +573,7 @@
 
         // Запуск
         fetchAllData();
+        showTab('play');
         setInterval(fetchLobbies, 3000);
     </script>
 </body>
