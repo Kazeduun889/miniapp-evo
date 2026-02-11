@@ -1,0 +1,98 @@
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse
+import db
+import os
+from typing import Optional
+
+app = FastAPI()
+
+# Mount static files (we'll create this directory)
+if not os.path.exists("static"):
+    os.makedirs("static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+templates = Jinja2Templates(directory="templates")
+if not os.path.exists("templates"):
+    os.makedirs("templates")
+
+@app.get("/")
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/api/user/{user_id}")
+async def get_user_data(user_id: int):
+    user = db.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # game_id, nickname, elo, level, matches, wins
+    return {
+        "game_id": user[0],
+        "nickname": user[1],
+        "elo": user[2],
+        "level": user[3],
+        "matches": user[4],
+        "wins": user[5]
+    }
+
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    users = db.get_all_users()
+    # Sort by ELO descending
+    sorted_users = sorted(users, key=lambda x: x[3], reverse=True)
+    
+    leaderboard = []
+    for u in sorted_users[:50]: # Top 50
+        leaderboard.append({
+            "user_id": u[0],
+            "nickname": u[2],
+            "elo": u[3],
+            "level": u[4]
+        })
+    return leaderboard
+
+@app.get("/api/lobbies")
+async def get_lobbies():
+    import state
+    lobby_players = state.lobby_players
+    
+    result = {}
+    for mode in ["1x1", "2x2", "5x5"]:
+        result[mode] = []
+        for lid in range(1, 11):
+            players = lobby_players[mode][lid]
+            max_p = 2 if mode == "1x1" else (4 if mode == "2x2" else 10)
+            result[mode].append({
+                "id": lid,
+                "players": len(players),
+                "max": max_p
+            })
+    return result
+
+@app.post("/api/user/update")
+async def update_user(data: dict):
+    user_id = data.get("user_id")
+    nickname = data.get("nickname")
+    game_id = data.get("game_id")
+    
+    import db
+    db.update_user_profile(user_id, nickname=nickname, game_id=game_id)
+    return {"status": "success"}
+
+@app.post("/api/lobby/enter")
+async def enter_lobby(data: dict):
+    user_id = data.get("user_id")
+    mode = data.get("mode")
+    lobby_id = data.get("lobby_id")
+    
+    import core
+    # Try to join
+    result = await core.join_lobby(user_id, mode, lobby_id)
+    
+    if result["status"] == "error" and result["message"] == "Already in lobby":
+        # If already in, then leave (toggle behavior)
+        result = await core.leave_lobby(user_id, mode, lobby_id)
+        
+    return result

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Facevo Mini App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .tg-theme {
+            background-color: var(--tg-theme-bg-color, #0f172a);
+            color: var(--tg-theme-text-color, #f8fafc);
+        }
+        .card {
+            background-color: #1e293b;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .active-tab {
+            color: #38bdf8;
+            border-bottom: 2px solid #38bdf8;
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 0;
+            flex: 1;
+            transition: all 0.2s;
+        }
+        .nav-item i {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+        .nav-item span {
+            font-size: 0.75rem;
+        }
+        .lobby-card {
+            transition: transform 0.1s;
+        }
+        .lobby-card:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body class="tg-theme">
+    <div id="app" class="pb-24">
+        <!-- Header -->
+        <header class="p-4 flex items-center justify-between sticky top-0 bg-[#0f172a] z-10 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-xl">F</div>
+                <h1 class="text-xl font-bold">Facevo</h1>
+            </div>
+            <div id="user-mini-profile" class="flex items-center space-x-2">
+                <div class="text-right">
+                    <p id="header-nickname" class="text-sm font-semibold">Загрузка...</p>
+                    <p id="header-elo" class="text-xs text-sky-400">0 ELO</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="p-4">
+            <!-- Profile Tab -->
+            <section id="tab-profile" class="tab-content">
+                <div class="card p-6 mb-6">
+                    <div class="flex items-center space-x-4 mb-6">
+                        <div id="profile-avatar" class="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center text-3xl font-bold">?</div>
+                        <div>
+                            <h2 id="profile-nickname" class="text-2xl font-bold">Загрузка...</h2>
+                            <p id="profile-gameid" class="text-slate-400">ID: ...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-800 p-4 rounded-xl text-center">
+                            <p class="text-slate-400 text-xs uppercase mb-1">ELO Рейтинг</p>
+                            <p id="profile-elo" class="text-2xl font-bold text-sky-400">0</p>
+                        </div>
+                        <div class="bg-slate-800 p-4 rounded-xl text-center">
+                            <p class="text-slate-400 text-xs uppercase mb-1">Уровень</p>
+                            <p id="profile-level" class="text-2xl font-bold text-orange-400">0</p>
+                        </div>
+                        <div class="bg-slate-800 p-4 rounded-xl text-center">
+                            <p class="text-slate-400 text-xs uppercase mb-1">Матчи</p>
+                            <p id="profile-matches" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="bg-slate-800 p-4 rounded-xl text-center">
+                            <p class="text-slate-400 text-xs uppercase mb-1">Победы</p>
+                            <p id="profile-wins" class="text-2xl font-bold text-green-400">0</p>
+                        </div>
+                    </div>
+
+                    <button class="w-full mt-6 bg-slate-700 hover:bg-slate-600 py-3 rounded-xl font-semibold transition">
+                        Редактировать профиль
+                    </button>
+                </div>
+
+                <div class="card p-6">
+                    <h3 class="font-bold mb-4">Статистика</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-400">Winrate</span>
+                            <span id="profile-winrate" class="font-semibold">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-2">
+                            <div id="winrate-bar" class="bg-sky-500 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Play Tab -->
+            <section id="tab-play" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-6">Поиск матча</h2>
+                
+                <div class="space-y-4">
+                    <div class="card p-5 lobby-card cursor-pointer" onclick="showLobbies('1x1')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-sky-900/50 text-sky-400 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-lg">1 на 1</h3>
+                                    <p class="text-slate-400 text-sm">Дуэль на Temple/Yard</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="bg-sky-500/20 text-sky-400 text-xs px-2 py-1 rounded-lg">LIVE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-5 lobby-card cursor-pointer" onclick="showLobbies('2x2')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-orange-900/50 text-orange-400 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-lg">2 на 2</h3>
+                                    <p class="text-slate-400 text-sm">Командный бой на Sandstone</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="bg-orange-500/20 text-orange-400 text-xs px-2 py-1 rounded-lg">LIVE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-5 lobby-card cursor-pointer" onclick="showLobbies('5x5')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-green-900/50 text-green-400 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-user-group"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-lg">5 на 5</h3>
+                                    <p class="text-slate-400 text-sm">Классический соревновательный</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-lg">LIVE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lobbies List (Hidden initially) -->
+                <div id="lobbies-list" class="mt-8 hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 id="current-mode-title" class="text-xl font-bold">Лобби 1x1</h3>
+                        <button onclick="hideLobbies()" class="text-slate-400"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div id="lobbies-container" class="space-y-3">
+                        <!-- Lobbies will be injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Leaderboard Tab -->
+            <section id="tab-leaderboard" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-6">Список лидеров</h2>
+                <div class="card overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-800 text-slate-400 text-xs uppercase">
+                            <tr>
+                                <th class="p-4">#</th>
+                                <th class="p-4">Игрок</th>
+                                <th class="p-4 text-right">ELO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body">
+                            <!-- Leaderboard items will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <!-- Rules Tab -->
+            <section id="tab-rules" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-6">Правила игры</h2>
+                <div class="card p-6 space-y-4">
+                    <div class="border-l-4 border-sky-500 pl-4">
+                        <h3 class="font-bold text-lg">Общие правила</h3>
+                        <p class="text-slate-400 text-sm">Используйте только официальное приложение Standoff 2. Любое использование стороннего ПО карается баном.</p>
+                    </div>
+                    <div class="border-l-4 border-orange-500 pl-4">
+                        <h3 class="font-bold text-lg">Матчи</h3>
+                        <p class="text-slate-400 text-sm">После завершения матча необходимо отправить скриншот результата в бот. Неявка на матч в течение 10 минут ведет к техническому поражению.</p>
+                    </div>
+                    <div class="border-l-4 border-green-500 pl-4">
+                        <h3 class="font-bold text-lg">ELO Рейтинг</h3>
+                        <p class="text-slate-400 text-sm">Ваш уровень (LVL) зависит от количества ELO. Победа дает от 15 до 30 ELO, поражение отнимает столько же.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-[#1e293b] border-t border-slate-800 flex justify-around px-2 pb-safe z-20">
+            <button onclick="showTab('profile')" id="nav-profile" class="nav-item active-tab">
+                <i class="fas fa-user-circle"></i>
+                <span>Профиль</span>
+            </button>
+            <button onclick="showTab('play')" id="nav-play" class="nav-item text-slate-400">
+                <i class="fas fa-gamepad"></i>
+                <span>Играть</span>
+            </button>
+            <button onclick="showTab('leaderboard')" id="nav-leaderboard" class="nav-item text-slate-400">
+                <i class="fas fa-trophy"></i>
+                <span>Лидеры</span>
+            </button>
+            <button onclick="showTab('rules')" id="nav-rules" class="nav-item text-slate-400">
+                <i class="fas fa-book"></i>
+                <span>Правила</span>
+            </button>
+        </nav>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        const userId = tg.initDataUnsafe?.user?.id || 1562788488; // Fallback for testing
+        
+        let userData = null;
+
+        async function fetchUserData() {
+            try {
+                const response = await fetch(`/api/user/${userId}`);
+                if (response.ok) {
+                    userData = await response.json();
+                    updateProfileUI();
+                }
+            } catch (e) {
+                console.error("Failed to fetch user data", e);
+            }
+        }
+
+        function updateProfileUI() {
+            if (!userData) return;
+            
+            document.getElementById('header-nickname').innerText = userData.nickname;
+            document.getElementById('header-elo').innerText = `${userData.elo} ELO`;
+            
+            document.getElementById('profile-nickname').innerText = userData.nickname;
+            document.getElementById('profile-gameid').innerText = `ID: ${userData.game_id}`;
+            document.getElementById('profile-elo').innerText = userData.elo;
+            document.getElementById('profile-level').innerText = userData.level;
+            document.getElementById('profile-matches').innerText = userData.matches;
+            document.getElementById('profile-wins').innerText = userData.wins;
+            document.getElementById('profile-avatar').innerText = userData.nickname.charAt(0).toUpperCase();
+            
+            const winrate = userData.matches > 0 ? Math.round((userData.wins / userData.matches) * 100) : 0;
+            document.getElementById('profile-winrate').innerText = `${winrate}%`;
+            document.getElementById('winrate-bar').style.width = `${winrate}%`;
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active-tab');
+                item.classList.add('text-slate-400');
+            });
+            document.getElementById(`nav-${tabId}`).classList.add('active-tab');
+            document.getElementById(`nav-${tabId}`).classList.remove('text-slate-400');
+
+            if (tabId === 'leaderboard') fetchLeaderboard();
+            if (tabId === 'play') fetchLobbies();
+        }
+
+        async function fetchLeaderboard() {
+            const tbody = document.getElementById('leaderboard-body');
+            tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-slate-400">Загрузка...</td></tr>';
+            
+            try {
+                const response = await fetch('/api/leaderboard');
+                const data = await response.json();
+                
+                tbody.innerHTML = '';
+                data.forEach((user, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-slate-800 last:border-0';
+                    tr.innerHTML = `
+                        <td class="p-4 font-bold ${index < 3 ? 'text-sky-400' : 'text-slate-500'}">${index + 1}</td>
+                        <td class="p-4">
+                            <div class="font-semibold">${user.nickname}</div>
+                            <div class="text-xs text-slate-500">LVL ${user.level}</div>
+                        </td>
+                        <td class="p-4 text-right font-bold text-sky-400">${user.elo}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        let lobbiesData = {};
+        let currentOpenMode = null;
+
+        async function fetchLobbies() {
+            try {
+                const response = await fetch('/api/lobbies');
+                if (response.ok) {
+                    lobbiesData = await response.json();
+                    if (currentOpenMode) showLobbies(currentOpenMode);
+                }
+            } catch (e) {
+                console.error("Failed to fetch lobbies", e);
+            }
+        }
+
+        function showLobbies(mode) {
+            currentOpenMode = mode;
+            document.getElementById('lobbies-list').classList.remove('hidden');
+            document.getElementById('current-mode-title').innerText = `Лобби ${mode}`;
+            
+            const container = document.getElementById('lobbies-container');
+            container.innerHTML = '';
+            
+            const lobbies = lobbiesData[mode] || [];
+            
+            if (lobbies.length === 0) {
+                container.innerHTML = '<div class="text-center p-4 text-slate-400">Нет доступных лобби</div>';
+                return;
+            }
+
+            lobbies.forEach(lobby => {
+                const div = document.createElement('div');
+                div.className = 'bg-slate-800 p-4 rounded-xl flex justify-between items-center';
+                
+                const isFull = lobby.players >= lobby.max;
+                
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold">Лобби #${lobby.id}</span>
+                        <div class="text-xs text-slate-400">${lobby.players}/${lobby.max} игроков</div>
+                    </div>
+                    <button 
+                        onclick="toggleLobby('${mode}', ${lobby.id})"
+                        class="px-4 py-2 rounded-lg text-sm font-bold ${isFull ? 'bg-slate-700 text-slate-500' : 'bg-sky-500 text-white'}"
+                        ${isFull ? 'disabled' : ''}
+                    >
+                        ${isFull ? 'Полное' : 'Войти'}
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function toggleLobby(mode, lobbyId) {
+            try {
+                const response = await fetch('/api/lobby/enter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        mode: mode,
+                        lobby_id: lobbyId
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    tg.HapticFeedback.impactOccurred('medium');
+                    fetchLobbies(); // Refresh
+                    if (result.action === 'joined') {
+                        tg.showAlert(`Вы вошли в лобби #${lobbyId}!`);
+                    } else {
+                        tg.showAlert(`Вы вышли из лобби #${lobbyId}`);
+                    }
+                } else {
+                    tg.showAlert(result.message || 'Ошибка при входе в лобби');
+                }
+            } catch (e) {
+                console.error(e);
+                tg.showAlert('Ошибка сетевого соединения');
+            }
+        }
+
+        function hideLobbies() {
+            currentOpenMode = null;
+            document.getElementById('lobbies-list').classList.add('hidden');
+        }
+
+        // Initialize
+        fetchUserData();
+    </script>
+</body>
+</html>
