@@ -38,18 +38,19 @@ dp2 = Dispatcher(storage=MemoryStorage()) if bot2 else None
 async def main():
     db.init_db()
     
-    # Восстановление состояния лобби из БД при запуске
+    # Восстановление состояния лобби из БД при запуске в Redis
     import state
     lobby_members = db.get_all_lobby_members()
     for uid, mode, lid in lobby_members:
         user = db.get_user(uid)
         if user:
             lvl = db.get_level_by_elo(user[2])
-            state.lobby_players[mode][lid][uid] = {
+            player_data = {
                 "nickname": user[1], 
                 "level": lvl, 
                 "game_id": user[0]
             }
+            await state.add_player_to_lobby(mode, lid, uid, player_data)
     
     # Запуск ботов и FastAPI сервера параллельно
     port = int(os.environ.get("PORT", 8000))
@@ -145,14 +146,10 @@ if dp2:
     dp2.message.middleware(MenuMiddleware())
 
 import state
+import core
 
-# Глобальные состояния теперь в state.py
-lobby_players = state.lobby_players
-lobby_viewers = state.lobby_viewers
-active_matches = state.active_matches
-pending_matches = state.pending_matches
-admin_messages = state.admin_messages
-support_requests = state.support_requests
+# Глобальные состояния теперь в state.py и Redis
+# (lobby_players, lobby_viewers, active_matches, pending_matches, support_requests теперь асинхронны)
 
 MAP_LIST_2X2 = ["Sandstone", "Province", "Breeze", "Dune", "Zone 7", "Rust", "Hanami"]
 MAP_LIST_1X1 = ["Temple", "Yard", "Bridge", "Pool", "Desert", "Pipeline", "Cableway"]
@@ -227,9 +224,10 @@ def main_menu_keyboard(user_id=None):
     ))
     return builder.as_markup(resize_keyboard=True, persistent=True)
 
-def get_lobby_keyboard(user_id, mode, lobby_id):
+async def get_lobby_keyboard(user_id, mode, lobby_id):
+    import state
     builder = InlineKeyboardBuilder()
-    players_in_lobby = lobby_players[mode][lobby_id]
+    players_in_lobby = await state.get_lobby_players(mode, lobby_id)
     
     if mode == "1x1":
         max_players = 2
@@ -238,7 +236,7 @@ def get_lobby_keyboard(user_id, mode, lobby_id):
     else: # 5x5
         max_players = 10
     
-    if user_id not in players_in_lobby:
+    if str(user_id) not in players_in_lobby:
         builder.row(types.InlineKeyboardButton(
             text=f"Войти в лобби {lobby_id} 🎮 ({len(players_in_lobby)}/{max_players})", 
             callback_data=f"l_enter_{mode}_{lobby_id}"
@@ -263,7 +261,8 @@ def get_mode_selection_keyboard():
     )
     return builder.as_markup()
 
-def get_lobby_list_keyboard(mode):
+async def get_lobby_list_keyboard(mode):
+    import state
     builder = InlineKeyboardBuilder()
     if mode == "1x1":
         max_p = 2
@@ -273,7 +272,8 @@ def get_lobby_list_keyboard(mode):
         max_p = 10
         
     for lid in range(1, 11):
-        count = len(lobby_players[mode][lid])
+        players = await state.get_lobby_players(mode, lid)
+        count = len(players)
         builder.row(types.InlineKeyboardButton(
             text=f"Лобби №{lid} [{count}/{max_p}]", 
             callback_data=f"view_l_{mode}_{lid}"
@@ -282,7 +282,8 @@ def get_lobby_list_keyboard(mode):
     return builder.as_markup()
 
 async def update_all_lobby_messages(mode, lobby_id):
-    players_in_lobby = lobby_players[mode][lobby_id]
+    import state
+    players_in_lobby = await state.get_lobby_players(mode, lobby_id)
     if mode == "1x1":
         max_p = 2
     elif mode == "2x2":
@@ -299,15 +300,16 @@ async def update_all_lobby_messages(mode, lobby_id):
             status_text += f"👤 {data['nickname']} | Lvl: {data['level']}\n"
     
     # Обновляем сообщения у всех, кто смотрит ИМЕННО ЭТО лобби
+    all_viewers = await state.get_all_viewers()
     dead_viewers = []
-    for uid, data in lobby_viewers.items():
+    for uid, data in all_viewers.items():
         if data.get("mode") == mode and data.get("lobby_id") == lobby_id:
             try:
                 await bot.edit_message_text(
                     text=status_text,
                     chat_id=data['chat_id'],
                     message_id=data['message_id'],
-                    reply_markup=get_lobby_keyboard(uid, mode, lobby_id)
+                    reply_markup=await get_lobby_keyboard(uid, mode, lobby_id)
                 )
             except TelegramBadRequest as e:
                 if "message is not modified" in str(e): continue
@@ -316,18 +318,20 @@ async def update_all_lobby_messages(mode, lobby_id):
                 dead_viewers.append(uid)
             
     for uid in dead_viewers:
-        if uid in lobby_viewers: del lobby_viewers[uid]
+        await state.remove_viewer(uid)
 
 async def update_lobby_list_for_all(mode):
+    import state
     # Обновляем список лобби для тех, кто находится на экране выбора лобби этого режима
-    for uid, data in lobby_viewers.items():
+    all_viewers = await state.get_all_viewers()
+    for uid, data in all_viewers.items():
         if data.get("mode") == mode and data.get("lobby_id") is None:
             try:
                 await bot.edit_message_text(
                     text=f"Выбран режим: {mode}. Выберите свободное лобби:",
                     chat_id=data['chat_id'],
                     message_id=data['message_id'],
-                    reply_markup=get_lobby_list_keyboard(mode)
+                    reply_markup=await get_lobby_list_keyboard(mode)
                 )
             except: pass
 
@@ -539,7 +543,8 @@ async def find_match(message: types.Message):
         "Выберите режим, в котором хотите соревноваться:",
         reply_markup=get_mode_selection_keyboard()
     )
-    lobby_viewers[message.from_user.id] = {"mode": None, "lobby_id": None, "message_id": msg.message_id, "chat_id": msg.chat.id}
+    import state
+    await state.set_viewer(message.from_user.id, None, None, msg.message_id, msg.chat.id)
 
 @dp.callback_query(F.data == "back_to_modes")
 async def back_to_modes(callback: types.CallbackQuery):
@@ -560,12 +565,8 @@ async def back_to_modes(callback: types.CallbackQuery):
         reply_markup=get_mode_selection_keyboard()
     )
     # Обновляем инфо о зрителе
-    lobby_viewers[callback.from_user.id] = {
-        "mode": None, 
-        "lobby_id": None,
-        "message_id": callback.message.message_id,
-        "chat_id": callback.message.chat.id
-    }
+    import state
+    await state.set_viewer(callback.from_user.id, None, None, callback.message.message_id, callback.message.chat.id)
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("mode_"))
@@ -581,15 +582,11 @@ async def select_mode(callback: types.CallbackQuery):
     mode = callback.data.split("_")[1]
     await callback.message.edit_text(
         f"Выбран режим: {mode}. Выберите свободное лобби:",
-        reply_markup=get_lobby_list_keyboard(mode)
+        reply_markup=await get_lobby_list_keyboard(mode)
     )
     # Обновляем инфо о зрителе
-    lobby_viewers[callback.from_user.id] = {
-        "mode": mode, 
-        "lobby_id": None,
-        "message_id": callback.message.message_id,
-        "chat_id": callback.message.chat.id
-    }
+    import state
+    await state.set_viewer(callback.from_user.id, mode, None, callback.message.message_id, callback.message.chat.id)
 
 @dp.callback_query(F.data.startswith("view_l_"))
 async def view_lobby(callback: types.CallbackQuery):
@@ -602,18 +599,14 @@ async def view_lobby(callback: types.CallbackQuery):
         return
 
     try:
+        import state
         _, _, mode, lobby_id = callback.data.split("_")
         lobby_id = int(lobby_id)
         
         # Обновляем инфо о зрителе
-        lobby_viewers[callback.from_user.id] = {
-            "mode": mode, 
-            "lobby_id": lobby_id, 
-            "message_id": callback.message.message_id,
-            "chat_id": callback.message.chat.id
-        }
+        await state.set_viewer(callback.from_user.id, mode, lobby_id, callback.message.message_id, callback.message.chat.id)
         
-        players_in_lobby = lobby_players[mode][lobby_id]
+        players_in_lobby = await state.get_lobby_players(mode, lobby_id)
         if mode == "1x1":
             max_players = 2
         elif mode == "2x2":
@@ -629,7 +622,7 @@ async def view_lobby(callback: types.CallbackQuery):
         else:
             text += "Лобби пусто.\n"
             
-        await callback.message.edit_text(text, reply_markup=get_lobby_keyboard(callback.from_user.id, mode, lobby_id))
+        await callback.message.edit_text(text, reply_markup=await get_lobby_keyboard(callback.from_user.id, mode, lobby_id))
     except Exception as e:
         logging.error(f"Error in view_lobby: {e}")
     finally:
@@ -652,119 +645,80 @@ async def lobby_enter_callback(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     
     # Обновляем инфо о зрителе (гарантируем актуальность message_id)
-    lobby_viewers[user_id] = {
-        "mode": mode, 
-        "lobby_id": lobby_id, 
-        "message_id": callback.message.message_id,
-        "chat_id": callback.message.chat.id
-    }
+    import state
+    await state.set_viewer(user_id, mode, lobby_id, callback.message.message_id, callback.message.chat.id)
     
-    # Проверка, не в другом ли лобби игрок
-    for m in lobby_players:
-        for lid in lobby_players[m]:
-            if user_id in lobby_players[m][lid]:
-                # Если он в ЭТОМ ЖЕ лобби, просто обновляем сообщение (могло рассинхрониться)
-                if m == mode and lid == lobby_id:
-                    await update_all_lobby_messages(mode, lobby_id)
-                    await callback.answer("Вы уже в этом лобби.")
-                else:
-                    # Если он числится в другом лобби, но пытается войти в это
-                    # Возможно, это рассинхрон после перезапуска. 
-                    # Удаляем из памяти и из БД
-                    del lobby_players[m][lid][user_id]
-                    db.remove_lobby_member(user_id)
-                    await update_all_lobby_messages(m, lid)
-                    # И продолжаем вход в новое...
-                    break 
+    import core
+    result = await core.join_lobby(user_id, mode, lobby_id)
+    
+    if result["status"] == "success":
+        await update_all_lobby_messages(mode, lobby_id)
+        await update_lobby_list_for_all(mode)
+        
+        if result.get("full"):
+            # Небольшая задержка перед подтверждением, чтобы пользователи увидели заполнение
+            await asyncio.sleep(0.5)
+            await request_match_accept(mode, lobby_id)
         else:
-            continue
-        break
-
-    user = db.get_user(user_id)
-    if not user:
-        await callback.answer("Ошибка: пользователь не найден в БД.", show_alert=True)
-        return
-        
-    level = db.get_level_by_elo(user[2])
-    
-    # Атомарная проверка вместимости перед входом
-    if mode == "1x1":
-        max_p = 2
-    elif mode == "2x2":
-        max_p = 4
-    else: # 5x5
-        max_p = 10
-        
-    if len(lobby_players[mode][lobby_id]) >= max_p:
-        await callback.answer("Лобби уже заполнено!", show_alert=True)
-        return
-
-    lobby_players[mode][lobby_id][user_id] = {"nickname": user[1], "level": level, "game_id": user[0]}
-    db.add_lobby_member(mode, lobby_id, user_id)
-    # Используем message.answer вместо callback.answer для надежности отображения
-    await callback.message.answer(f"✅ Вы вошли в лобби №{lobby_id} ({mode})")
-    
-    await update_all_lobby_messages(mode, lobby_id)
-    await update_lobby_list_for_all(mode)
-    
-    if len(lobby_players[mode][lobby_id]) >= max_p:
-        # Небольшая задержка перед подтверждением, чтобы пользователи увидели заполнение
-        await asyncio.sleep(0.5)
-        await request_match_accept(mode, lobby_id)
+            await callback.message.answer(f"✅ Вы вошли в лобби №{lobby_id} ({mode})")
+    else:
+        await callback.answer(result.get("message", "Ошибка"), show_alert=True)
 
 async def request_match_accept(mode, lobby_id):
-    if not lobby_players[mode][lobby_id]:
+    import state
+    players_in_lobby = await state.get_lobby_players(mode, lobby_id)
+    if not players_in_lobby:
         return
         
-    players = list(lobby_players[mode][lobby_id].items())
-    player_ids = [uid for uid, _ in players]
+    players = list(players_in_lobby.items())
+    player_ids = [int(uid) for uid in players_in_lobby.keys()]
     
-    # Удаляем участников лобби из БД при создании матча
+    # Удаляем участников лобби из БД и Redis при создании матча
     for uid in player_ids:
         db.remove_lobby_member(uid)
-        
-    lobby_players[mode][lobby_id].clear()
+        await state.remove_player_from_lobby(mode, lobby_id, uid)
+        await state.remove_viewer(uid)
     
     match_num = db.create_match(mode, player_ids)
     
-    pending_matches[match_num] = {
+    match_data = {
         "players": players,
-        "accepted": set(),
+        "accepted": [], # JSON не поддерживает set, будем использовать список
         "messages": {},
         "mode": mode
     }
-    
-    # Убираем всех из зрителей (чтобы не спамило обновлениями)
-    for uid, _ in players:
-        if uid in lobby_viewers: del lobby_viewers[uid]
     
     await update_lobby_list_for_all(mode) # Обновляем список лобби (теперь оно пустое)
         
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(text="Принять ✅", callback_data=f"accept_{match_num}"))
     
-    for uid, _ in players:
+    for uid_str, _ in players:
+        uid = int(uid_str)
         try:
             msg = await bot.send_message(uid, f"🔔 Игра {mode} найдена! Подтвердите участие (Матч №{match_num})\nУ вас есть 60 секунд.", reply_markup=builder.as_markup())
-            pending_matches[match_num]["messages"][uid] = msg.message_id
+            match_data["messages"][str(uid)] = msg.message_id
         except: pass
     
+    await state.set_match(match_num, match_data, pending=True)
     asyncio.create_task(check_accept_timeout(match_num))
 
 async def check_accept_timeout(match_num):
     await asyncio.sleep(60) 
-    if match_num in pending_matches:
-        match = pending_matches[match_num]
-        accepted_ids = match["accepted"]
+    import state
+    match = await state.get_match(match_num, pending=True)
+    if match:
+        accepted_ids = set(match["accepted"])
         mode = match["mode"]
         
         # Кто не принял
-        not_accepted = [p for p in match["players"] if p[0] not in accepted_ids]
+        not_accepted = [p for p in match["players"] if int(p[0]) not in accepted_ids]
         # Кто принял
-        accepted_players = [p for p in match["players"] if p[0] in accepted_ids]
+        accepted_players = [p for p in match["players"] if int(p[0]) in accepted_ids]
         
         # Обработка тех, кто не принял
-        for p_uid, p_data in not_accepted:
+        for p_uid_str, p_data in not_accepted:
+            p_uid = int(p_uid_str)
             # Инкремент предупреждений
             count = db.increment_missed_games(p_uid)
             
@@ -780,38 +734,37 @@ async def check_accept_timeout(match_num):
                     await bot.send_message(p_uid, f"⚠️ Вы не подтвердили игру! Предупреждение: {count}/3. При 3/3 — бан на 30 минут.")
                 
                 # Убираем кнопки у опоздавшего
-                await bot.edit_message_text("Вы не подтвердили игру и были кикнуты из очереди.", chat_id=p_uid, message_id=match["messages"].get(p_uid))
+                await bot.edit_message_text("Вы не подтвердили игру и были кикнуты из очереди.", chat_id=p_uid, message_id=match["messages"].get(str(p_uid)))
             except: pass
 
         # Обработка тех, кто принял
         if accepted_players:
             # Возвращаем их в лобби (или просто уведомляем, что они остаются в очереди)
             # Находим свободное лобби для них или создаем видимость, что они там
-            # Но по логике текущего кода, лобби было очищено. 
-            # Нам нужно найти ПЕРВОЕ свободное лобби этого режима и закинуть их туда.
             
             target_lobby_id = 1
             for lid in range(1, 11):
-                if len(lobby_players[mode][lid]) == 0:
+                p_in_l = await state.get_lobby_players(mode, lid)
+                if len(p_in_l) == 0:
                     target_lobby_id = lid
                     break
             
-            for p_uid, p_data in accepted_players:
+            for p_uid_str, p_data in accepted_players:
+                p_uid = int(p_uid_str)
                 try:
-                    # Возвращаем в память
-                    lobby_players[mode][target_lobby_id][p_uid] = p_data
+                    # Возвращаем в Redis
+                    await state.add_player_to_lobby(mode, target_lobby_id, p_uid, p_data)
                     # Возвращаем в БД
                     db.add_lobby_member(mode, target_lobby_id, p_uid)
                     
-                    await bot.edit_message_text(f"Матч отменен: не все игроки подтвердили участие.\nВы возвращены в лобби №{target_lobby_id}.", chat_id=p_uid, message_id=match["messages"].get(p_uid))
+                    await bot.edit_message_text(f"Матч отменен: не все игроки подтвердили участие.\nВы возвращены в лобби №{target_lobby_id}.", chat_id=p_uid, message_id=match["messages"].get(str(p_uid)))
                 except: pass
             
             await update_all_lobby_messages(mode, target_lobby_id)
             await update_lobby_list_for_all(mode)
 
         db.cancel_match(match_num)
-        if match_num in pending_matches:
-            del pending_matches[match_num]
+        await state.delete_match(match_num, pending=True)
 
 @dp.callback_query(F.data.startswith("accept_"))
 async def handle_accept(callback: types.CallbackQuery):
@@ -819,46 +772,43 @@ async def handle_accept(callback: types.CallbackQuery):
     match_num = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
     
-    # Сначала пытаемся найти в памяти
-    if match_num not in pending_matches:
-        # Если в памяти нет (после перезагрузки), проверяем БД
+    import state
+    # Сначала пытаемся найти в Redis
+    match = await state.get_match(match_num, pending=True)
+    if not match:
+        # Если в Redis нет (после перезагрузки или истечения TTL), проверяем БД
         match_db = db.get_pending_match(match_num)
         if not match_db:
             await callback.answer("Матч уже отменен, не существует или уже начат.", show_alert=True)
             return
             
-        # Восстанавливаем в памяти из БД
+        # Восстанавливаем
         players_db = db.get_match_players(match_num)
-        # [(user_id, nickname, elo, level, accepted), ...]
-        
-        # Нам нужно восстановить players как список кортежей (uid, data_dict)
         restored_players = []
-        accepted_set = set()
+        accepted_list = []
         for p in players_db:
             uid, nick, elo, lvl, accepted = p
             u_full = db.get_user(uid)
             gid = u_full[0] if u_full else str(uid)
-            
             p_data = {"nickname": nick, "level": lvl, "game_id": gid}
-            restored_players.append((uid, p_data))
+            restored_players.append((str(uid), p_data))
             if accepted:
-                accepted_set.add(uid)
+                accepted_list.append(uid)
         
-        pending_matches[match_num] = {
+        match = {
             "players": restored_players,
-            "accepted": accepted_set,
-            "messages": {}, # Сообщения восстановить нельзя, но кнопки нажать можно
+            "accepted": accepted_list,
+            "messages": {},
             "mode": match_db[1]
         }
-        
-    match = pending_matches[match_num]
-    
+        await state.set_match(match_num, match, pending=True)
+
     if user_id in match["accepted"]:
-        # await callback.answer("Вы уже подтвердили участие.") # Уже подтвердили callback в начале
         return
         
-    match["accepted"].add(user_id)
+    match["accepted"].append(user_id)
     db.accept_match_player(match_num, user_id)
+    await state.set_match(match_num, match, pending=True)
     
     try:
         await callback.message.edit_text("Вы подтвердили участие! Ожидание остальных... ⏳")
@@ -868,19 +818,19 @@ async def handle_accept(callback: types.CallbackQuery):
     if len(match["accepted"]) == len(match["players"]):
         players = match["players"]
         mode = match["mode"]
-        if match_num in pending_matches:
-            del pending_matches[match_num]
+        await state.delete_match(match_num, pending=True)
         await start_match_setup(match_num, players, mode)
 
 async def start_match_setup(match_num, players, mode):
     random.shuffle(players)
+    import state
     
     if mode == "1x1":
         # В режиме 1 на 1 нет выбора капитанов и пика игроков
         p1 = players[0]
         p2 = players[1]
         
-        active_matches[match_num] = {
+        match_data = {
             "players": players,
             "mode": "1x1",
             "maps": MAP_LIST_1X1.copy(),
@@ -891,8 +841,9 @@ async def start_match_setup(match_num, players, mode):
             "elo_gain": random.randint(5, 15),
             "message_ids": {}
         }
-        for uid, _ in players:
-            await bot.send_message(uid, f"🔔 ВСЕ ПОДТВЕРДИЛИ! (Матч 1x1 №{match_num})\n\nНачинаем бан карт.")
+        await state.set_match(match_num, match_data, pending=False)
+        for uid_str, _ in players:
+            await bot.send_message(int(uid_str), f"🔔 ВСЕ ПОДТВЕРДИЛИ! (Матч 1x1 №{match_num})\n\nНачинаем бан карт.")
         await send_map_selection(match_num)
     elif mode == "2x2":
         # Режим 2x2 - стандартная логика с капитанами
@@ -900,7 +851,7 @@ async def start_match_setup(match_num, players, mode):
         cap_t = players[1]
         available_players = [p for p in players if p[0] not in [cap_ct[0], cap_t[0]]]
         
-        active_matches[match_num] = {
+        match_data = {
             "players": players,
             "mode": "2x2",
             "available_players": available_players, 
@@ -913,8 +864,9 @@ async def start_match_setup(match_num, players, mode):
             "elo_gain": random.randint(20, 30),
             "message_ids": {}
         }
-        for uid, _ in players:
-            await bot.send_message(uid, f"🔔 ВСЕ ПОДТВЕРДИЛИ! (Матч 2x2 №{match_num})\nКапитан CT: {cap_ct[1]['nickname']}\nКапитан T: {cap_t[1]['nickname']}\n\nНачинаем бан карт. Первые банят CT.")
+        await state.set_match(match_num, match_data, pending=False)
+        for uid_str, _ in players:
+            await bot.send_message(int(uid_str), f"🔔 ВСЕ ПОДТВЕРДИЛИ! (Матч 2x2 №{match_num})\nКапитан CT: {cap_ct[1]['nickname']}\nКапитан T: {cap_t[1]['nickname']}\n\nНачинаем бан карт. Первые банят CT.")
         await send_map_selection(match_num)
     else: # 5x5
         # Режим 5x5 - логика как в 2x2, но мап-пул такой же (по условию)
@@ -922,7 +874,7 @@ async def start_match_setup(match_num, players, mode):
         cap_t = players[1]
         available_players = [p for p in players if p[0] not in [cap_ct[0], cap_t[0]]]
         
-        active_matches[match_num] = {
+        match_data = {
             "players": players,
             "mode": "5x5",
             "available_players": available_players, 
@@ -935,14 +887,16 @@ async def start_match_setup(match_num, players, mode):
             "elo_gain": random.randint(25, 35),
             "message_ids": {}
         }
-        for uid, _ in players:
-            await bot.send_message(uid, f"🔔 ВСЕ ПОДТВЕРДИЛИ! (Матч 5x5 №{match_num})\nКапитан CT: {cap_ct[1]['nickname']}\nКапитан T: {cap_t[1]['nickname']}\n\nНачинаем бан карт. Первые банят CT.")
+        await state.set_match(match_num, match_data, pending=False)
+        for uid_str, _ in players:
+            await bot.send_message(int(uid_str), f"🔔 ВСЕ ПОДТВЕРДИЛИ! (Матч 5x5 №{match_num})\nКапитан CT: {cap_ct[1]['nickname']}\nКапитан T: {cap_t[1]['nickname']}\n\nНачинаем бан карт. Первые банят CT.")
         await send_map_selection(match_num)
 
 async def auto_ban_timer(match_id, turn_at_start):
     await asyncio.sleep(30)
-    if match_id not in active_matches: return
-    match = active_matches[match_id]
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match: return
     if match.get("phase") != "ban" or match.get("turn") != turn_at_start: return
     
     # Если время вышло и это всё еще тот же ход и фаза бана
@@ -954,27 +908,31 @@ async def auto_ban_timer(match_id, turn_at_start):
             match["turn"] = "p2" if match["turn"] == "p1" else "p1"
         else:
             match["turn"] = "t" if match["turn"] == "ct" else "ct"
+        await state.set_match(match_id, match, pending=False)
         await send_map_selection(match_id)
     else:
         match["final_map"] = match["maps"][0]
-        for uid, msg_id in match.get("message_ids", {}).items():
-            try: await bot.delete_message(chat_id=uid, message_id=msg_id)
+        for uid_str, msg_id in match.get("message_ids", {}).items():
+            try: await bot.delete_message(chat_id=int(uid_str), message_id=msg_id)
             except: pass
         match["message_ids"] = {}
         
         if match.get("mode") in ["2x2", "5x5"]:
             match["phase"] = "pick"
             match["turn"] = "t"
-            for uid, _ in match["players"]:
-                await bot.send_message(uid, f"Время вышло! Карта определена автоматически: {match['final_map']}!\nПереходим к выбору игроков.")
+            await state.set_match(match_id, match, pending=False)
+            for uid_str, _ in match["players"]:
+                await bot.send_message(int(uid_str), f"Время вышло! Карта определена автоматически: {match['final_map']}!\nПереходим к выбору игроков.")
             await send_player_selection(match_id)
         else:
+            await state.set_match(match_id, match, pending=False)
             await finish_match_setup(match_id)
 
 async def auto_pick_timer(match_id, turn_at_start):
     await asyncio.sleep(30)
-    if match_id not in active_matches: return
-    match = active_matches[match_id]
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match: return
     if match.get("phase") != "pick" or match.get("turn") != turn_at_start: return
     
     # Если время вышло и это всё еще тот же ход и фаза пика
@@ -984,16 +942,21 @@ async def auto_pick_timer(match_id, turn_at_start):
     
     if match["available_players"]:
         match["turn"] = "ct" if match["turn"] == "t" else "t"
+        await state.set_match(match_id, match, pending=False)
         await send_player_selection(match_id)
     else:
-        for uid, msg_id in match.get("message_ids", {}).items():
-            try: await bot.delete_message(chat_id=uid, message_id=msg_id)
+        for uid_str, msg_id in match.get("message_ids", {}).items():
+            try: await bot.delete_message(chat_id=int(uid_str), message_id=msg_id)
             except: pass
         match["message_ids"] = {}
+        await state.set_match(match_id, match, pending=False)
         await finish_match_setup(match_id)
 
 async def send_map_selection(match_id):
-    match = active_matches[match_id]
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match: return
+    
     builder = InlineKeyboardBuilder()
     
     # Кнопки в 2 столбика
@@ -1009,47 +972,54 @@ async def send_map_selection(match_id):
         p1_name = match['players'][0][1]['nickname']
         p2_name = match['players'][1][1]['nickname']
         turn_text = f"игрока {p1_name if match['turn'] == 'p1' else p2_name}"
-        current_turn_uid = match['players'][0 if match['turn'] == 'p1' else 1][0]
+        current_turn_uid = int(match['players'][0 if match['turn'] == 'p1' else 1][0])
     else:
         turn_text = f"капитана {'CT' if match['turn'] == 'ct' else 'T'}"
-        current_turn_uid = match['captains'][match['turn']]
+        current_turn_uid = int(match['captains'][match['turn']])
         
     text = f"⏳ У вас 30 секунд!\nЭтап: БАН КАРТ\nХод {turn_text}\nКарты в пуле: {', '.join(match['maps'])}"
     
     # Запускаем таймер авто-бана
     asyncio.create_task(auto_ban_timer(match_id, match['turn']))
     
-    for uid, _ in match['players']:
+    for uid_str, _ in match['players']:
+        uid = int(uid_str)
         markup = builder.as_markup() if uid == current_turn_uid else None
         msg_text = text if uid == current_turn_uid else f"{text}\n(Ожидание хода противника)"
         
-        if uid in match.get("message_ids", {}):
+        if str(uid) in match.get("message_ids", {}):
             try:
                 await bot.edit_message_text(
                     chat_id=uid,
-                    message_id=match["message_ids"][uid],
+                    message_id=match["message_ids"][str(uid)],
                     text=msg_text,
                     reply_markup=markup
                 )
             except:
                 # Если сообщение нельзя редактировать, отправляем новое
                 new_msg = await bot.send_message(uid, msg_text, reply_markup=markup)
-                match["message_ids"][uid] = new_msg.message_id
+                match["message_ids"][str(uid)] = new_msg.message_id
         else:
             new_msg = await bot.send_message(uid, msg_text, reply_markup=markup)
             if "message_ids" not in match: match["message_ids"] = {}
-            match["message_ids"][uid] = new_msg.message_id
+            match["message_ids"][str(uid)] = new_msg.message_id
+            
+    await state.set_match(match_id, match, pending=False)
 
 @dp.callback_query(F.data.startswith("ban_"))
 async def handle_ban(callback: types.CallbackQuery):
     _, match_id, map_name = callback.data.split("_")
     match_id = int(match_id)
-    match = active_matches[match_id]
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match:
+        await callback.answer("Матч не найден или уже завершен.", show_alert=True)
+        return
     
     if match.get("mode") == "1x1":
-        current_turn_uid = match['players'][0 if match['turn'] == 'p1' else 1][0]
+        current_turn_uid = int(match['players'][0 if match['turn'] == 'p1' else 1][0])
     else:
-        current_turn_uid = match['captains'][match['turn']]
+        current_turn_uid = int(match['captains'][match['turn']])
         
     if callback.from_user.id != current_turn_uid: 
         await callback.answer("Сейчас не ваш ход!", show_alert=True)
@@ -1063,67 +1033,81 @@ async def handle_ban(callback: types.CallbackQuery):
             match['turn'] = "p2" if match['turn'] == "p1" else "p1"
         else:
             match['turn'] = "t" if match['turn'] == "ct" else "ct"
+        await state.set_match(match_id, match, pending=False)
         await send_map_selection(match_id)
     else:
         match['final_map'] = match['maps'][0]
         # Очищаем старые сообщения перед переходом к следующей фазе
-        for uid, msg_id in match.get("message_ids", {}).items():
-            try: await bot.delete_message(chat_id=uid, message_id=msg_id)
+        for uid_str, msg_id in match.get("message_ids", {}).items():
+            try: await bot.delete_message(chat_id=int(uid_str), message_id=msg_id)
             except: pass
         match["message_ids"] = {}
         
         if match.get("mode") in ["2x2", "5x5"]:
             match['phase'] = "pick"
             match['turn'] = "t"
-            for uid, _ in match['players']:
-                await bot.send_message(uid, f"Карта определена: {match['final_map']}!\nПереходим к выбору игроков. Первые выбирают T.")
+            await state.set_match(match_id, match, pending=False)
+            for uid_str, _ in match['players']:
+                await bot.send_message(int(uid_str), f"Карта определена: {match['final_map']}!\nПереходим к выбору игроков. Первые выбирают T.")
             await send_player_selection(match_id)
         else:
             # В 1x1 сразу финиш
+            await state.set_match(match_id, match, pending=False)
             await finish_match_setup(match_id)
 
 async def send_player_selection(match_id):
-    match = active_matches[match_id]
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match: return
+    
     builder = InlineKeyboardBuilder()
-    for p_id, p_data in match['available_players']:
-        builder.row(types.InlineKeyboardButton(text=f"Пик {p_data['nickname']} (Lvl {p_data['level']})", callback_data=f"pick_{match_id}_{p_id}"))
+    for p_id_str, p_data in match['available_players']:
+        builder.row(types.InlineKeyboardButton(text=f"Пик {p_data['nickname']} (Lvl {p_data['level']})", callback_data=f"pick_{match_id}_{p_id_str}"))
     
     avail_nicks = [p[1]['nickname'] for p in match['available_players']]
     text = f"⏳ У вас 30 секунд!\nЭтап: ПИК ИГРОКОВ\nХод капитана {'CT' if match['turn'] == 'ct' else 'T'}\nДоступны: {', '.join(avail_nicks)}"
-    current_cap = match['captains'][match['turn']]
+    current_cap = int(match['captains'][match['turn']])
     
     # Запускаем таймер авто-пика
     asyncio.create_task(auto_pick_timer(match_id, match['turn']))
     
-    for uid, _ in match['players']:
+    for uid_str, _ in match['players']:
+        uid = int(uid_str)
         markup = builder.as_markup() if uid == current_cap else None
         msg_text = text if uid == current_cap else f"{text}\n(Ожидание хода капитана)"
         
-        if uid in match.get("message_ids", {}):
+        if str(uid) in match.get("message_ids", {}):
             try:
                 await bot.edit_message_text(
                     chat_id=uid,
-                    message_id=match["message_ids"][uid],
+                    message_id=match["message_ids"][str(uid)],
                     text=msg_text,
                     reply_markup=markup
                 )
             except:
                 new_msg = await bot.send_message(uid, msg_text, reply_markup=markup)
-                match["message_ids"][uid] = new_msg.message_id
+                match["message_ids"][str(uid)] = new_msg.message_id
         else:
             new_msg = await bot.send_message(uid, msg_text, reply_markup=markup)
-            match["message_ids"][uid] = new_msg.message_id
+            match["message_ids"][str(uid)] = new_msg.message_id
+            
+    await state.set_match(match_id, match, pending=False)
 
 @dp.callback_query(F.data.startswith("pick_"))
 async def handle_pick(callback: types.CallbackQuery):
-    _, match_id, p_id = callback.data.split("_")
-    match_id, p_id = int(match_id), int(p_id)
-    match = active_matches[match_id]
-    if callback.from_user.id != match['captains'][match['turn']]: 
+    _, match_id, p_id_str = callback.data.split("_")
+    match_id = int(match_id)
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match:
+        await callback.answer("Матч не найден или уже завершен.", show_alert=True)
+        return
+        
+    if callback.from_user.id != int(match['captains'][match['turn']]): 
         await callback.answer("Сейчас не ваш ход!", show_alert=True)
         return
     
-    picked_player = next(p for p in match['available_players'] if p[0] == p_id)
+    picked_player = next(p for p in match['available_players'] if p[0] == p_id_str)
     await callback.answer(f"Вы выбрали {picked_player[1]['nickname']}")
     
     match['teams'][match['turn']].append(picked_player)
@@ -1131,17 +1115,22 @@ async def handle_pick(callback: types.CallbackQuery):
     
     if match['available_players']:
         match['turn'] = "ct" if match['turn'] == "t" else "t"
+        await state.set_match(match_id, match, pending=False)
         await send_player_selection(match_id)
     else:
         # Очистка сообщений перед финалом
-        for uid, msg_id in match.get("message_ids", {}).items():
-            try: await bot.delete_message(chat_id=uid, message_id=msg_id)
+        for uid_str, msg_id in match.get("message_ids", {}).items():
+            try: await bot.delete_message(chat_id=int(uid_str), message_id=msg_id)
             except: pass
         match["message_ids"] = {}
+        await state.set_match(match_id, match, pending=False)
         await finish_match_setup(match_id)
 
 async def finish_match_setup(match_id):
-    match = active_matches[match_id]
+    import state
+    match = await state.get_match(match_id, pending=False)
+    if not match: return
+    
     ct_team = "\n".join([f"• {p[1]['nickname']} (Lvl {p[1]['level']})" for p in match['teams']['ct']])
     t_team = "\n".join([f"• {p[1]['nickname']} (Lvl {p[1]['level']})" for p in match['teams']['t']])
     
@@ -1164,26 +1153,32 @@ async def finish_match_setup(match_id):
         f"📉 За поражение: -{match['elo_gain']} ELO\n\n"
         f"⚠️ Напоминание: Ваши никнеймы в игре ДОЛЖЕНЫ совпадать с никнеймами в боте!"
     )
-    for uid, _ in match['players']:
-        await bot.send_message(uid, text, reply_markup=builder.as_markup())
+    for uid_str, _ in match['players']:
+        await bot.send_message(int(uid_str), text, reply_markup=builder.as_markup())
     
     # Отправка того же сообщения админам (если они не игроки в этом матче)
     player_ids = [p[0] for p in match['players']]
     for admin_id in ADMINS:
-        if admin_id not in player_ids:
+        if str(admin_id) not in player_ids:
             try:
                 await bot.send_message(admin_id, text, reply_markup=builder.as_markup())
             except: pass
     
-    # Не удаляем матч сразу, чтобы кнопка скриншота работала
-    # del active_matches[match_id]
+    # Сохраняем финальное состояние матча в Redis (оно будет доступно для скриншотов)
+    await state.set_match(match_id, match, pending=False)
 
 @dp.callback_query(F.data.startswith("result_"))
 async def handle_result_button(callback: types.CallbackQuery, state: FSMContext):
     match_id = int(callback.data.split("_")[1])
+    import state as app_state
+    match = await app_state.get_match(match_id, pending=False)
+    if not match:
+        await callback.answer("Данные матча не найдены. Возможно, он слишком старый.", show_alert=True)
+        return
+        
     await state.update_data(current_match_id=match_id)
     await state.set_state(MatchResult.waiting_for_screenshot)
-    await callback.message.answer("Пожалуйста, отправьте скриншот результата этого матча:")
+    await callback.message.answer("Отправьте скриншот результата матча (таблицу счета).")
     await callback.answer()
 
 @dp.message(MatchResult.waiting_for_screenshot)
@@ -1213,17 +1208,16 @@ async def process_screenshot(message: types.Message, state: FSMContext):
     user = db.get_user(message.from_user.id)
     nickname = user[1] if user else "Unknown"
     
-    # Кнопки для админов
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        types.InlineKeyboardButton(text="✅ CT WIN", callback_data=f"admin_win_{match_id}_ct"),
-        types.InlineKeyboardButton(text="✅ T WIN", callback_data=f"admin_win_{match_id}_t")
-    )
-    builder.row(types.InlineKeyboardButton(text="❌ Отменить", callback_data=f"admin_cancel_{match_id}"))
-    
+    import state as app_state
+    # Проверяем существование матча в Redis
+    match = await app_state.get_match(match_id, pending=False)
+    if not match:
+        await message.answer("Ошибка: данные матча не найдены в системе. Возможно, истекло время ожидания.")
+        await state.clear()
+        return
+
     # Пересылаем админам
-    if match_id not in admin_messages:
-        admin_messages[match_id] = {}
+    admin_msgs = await app_state.get_data(f"admin_msgs:{match_id}") or {}
         
     for admin_id in ADMINS:
         try:
@@ -1255,12 +1249,11 @@ async def process_screenshot(message: types.Message, state: FSMContext):
 
             asyncio.create_task(add_buttons_after_delay(admin_id, msg.message_id, match_id, nickname, message.from_user.id))
             
-            if match_id not in admin_messages:
-                admin_messages[match_id] = {}
-            admin_messages[match_id][admin_id] = msg.message_id
+            admin_msgs[str(admin_id)] = msg.message_id
         except Exception as e:
             logging.error(f"Failed to send to admin {admin_id}: {e}")
             
+    await app_state.set_data(f"admin_msgs:{match_id}", admin_msgs, ex=7200) # 2 часа TTL
     await message.answer("Скриншот отправлен админам! Ожидайте подтверждения и обновления ELO. ✅")
     await state.clear()
 
@@ -1269,21 +1262,22 @@ async def admin_nullify_one(callback: types.CallbackQuery, state: FSMContext):
     if callback.from_user.id not in ADMINS: return
     match_id = int(callback.data.split("_")[2])
     
-    if match_id not in active_matches:
-        try: await callback.answer("Ошибка: матч не найден в активных!", show_alert=True)
+    import state as app_state
+    match = await app_state.get_match(match_id, pending=False)
+    if not match:
+        try: await callback.answer("Ошибка: матч не найден!", show_alert=True)
         except TelegramBadRequest: pass
         return
         
-    match = active_matches[match_id]
     builder = InlineKeyboardBuilder()
     
     # Создаем кнопки для каждого игрока в матче
     for team_name, players in match['teams'].items():
-        for p_uid, p_data in players:
+        for p_uid_str, p_data in players:
             nickname = p_data['nickname']
             builder.row(types.InlineKeyboardButton(
                 text=f"👤 {nickname} ({team_name})", 
-                callback_data=f"nullp_{match_id}_{p_uid}"
+                callback_data=f"nullp_{match_id}_{p_uid_str}"
             ))
             
     builder.row(types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_back_to_match_{match_id}"))
@@ -1345,18 +1339,20 @@ async def admin_confirm_win(callback: types.CallbackQuery):
     _, _, match_id, winner_team = callback.data.split("_")
     match_id = int(match_id)
     
-    if match_id not in active_matches:
-        await callback.answer("Ошибка: матч не найден в активных!", show_alert=True)
+    import state as app_state
+    match = await app_state.get_match(match_id, pending=False)
+    if not match:
+        await callback.answer("Ошибка: матч не найден!", show_alert=True)
         return
         
-    match = active_matches[match_id]
     elo_gain = match['elo_gain']
     
     # Начисляем/вычитаем ELO
     for team_name, players in match['teams'].items():
         is_win = (team_name == winner_team)
         change = elo_gain if is_win else -elo_gain
-        for p_uid, p_data in players:
+        for p_uid_str, p_data in players:
+            p_uid = int(p_uid_str)
             db.update_elo(p_uid, change, is_win)
             try:
                 result_text = "ПОБЕДА! 🎉" if is_win else "ПОРАЖЕНИЕ... 📉"
@@ -1364,19 +1360,19 @@ async def admin_confirm_win(callback: types.CallbackQuery):
             except: pass
             
     # Синхронизация: удаляем кнопки у всех админов
-    if match_id in admin_messages:
-        for admin_id, msg_id in admin_messages[match_id].items():
+    admin_msgs = await app_state.get_data(f"admin_msgs:{match_id}")
+    if admin_msgs:
+        for admin_id_str, msg_id in admin_msgs.items():
             try:
                 await bot.edit_message_caption(
-                    chat_id=admin_id,
+                    chat_id=int(admin_id_str),
                     message_id=msg_id,
                     caption=f"✅ Матч №{match_id} подтвержден. Победили {winner_team.upper()}.\n(Подтвердил: {callback.from_user.full_name})"
                 )
             except: pass
-        del admin_messages[match_id]
+        await app_state.delete_data(f"admin_msgs:{match_id}")
         
-    if match_id in active_matches:
-        del active_matches[match_id]
+    await app_state.delete_match(match_id, pending=False)
     try: await callback.answer("Результат подтвержден!")
     except TelegramBadRequest: pass
 
@@ -1385,25 +1381,28 @@ async def admin_cancel_match(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMINS: return
     match_id = int(callback.data.split("_")[2])
     
-    if match_id in active_matches:
-        match = active_matches[match_id]
-        for p_uid, _ in match['players']:
+    import state as app_state
+    match = await app_state.get_match(match_id, pending=False)
+    if match:
+        for p_uid_str, _ in match['players']:
             try:
-                await bot.send_message(p_uid, f"❌ Результат матча №{match_id} был отклонен админом.")
+                await bot.send_message(int(p_uid_str), f"❌ Результат матча №{match_id} был отклонен админом.")
             except: pass
             
     # Синхронизация: удаляем кнопки у всех админов
-    if match_id in admin_messages:
-        for admin_id, msg_id in admin_messages[match_id].items():
+    admin_msgs = await app_state.get_data(f"admin_msgs:{match_id}")
+    if admin_msgs:
+        for admin_id_str, msg_id in admin_msgs.items():
             try:
                 await bot.edit_message_caption(
-                    chat_id=admin_id,
+                    chat_id=int(admin_id_str),
                     message_id=msg_id,
                     caption=f"❌ Результат матча №{match_id} отклонен.\n(Отклонил: {callback.from_user.full_name})"
                 )
             except: pass
-        del admin_messages[match_id]
-        
+        await app_state.delete_data(f"admin_msgs:{match_id}")
+    
+    await app_state.delete_match(match_id, pending=False)
     try: await callback.answer("Результат отклонен")
     except TelegramBadRequest: pass
 
@@ -1415,27 +1414,24 @@ async def lobby_exit_callback(callback: types.CallbackQuery):
     lobby_id = int(lobby_id)
     user_id = callback.from_user.id
     
-    # Пытаемся найти пользователя во всех лобби этого режима, если в указанном его нет
-    found = False
-    if user_id in lobby_players[mode][lobby_id]:
-        del lobby_players[mode][lobby_id][user_id]
-        found = True
-    else:
-        # Проверяем другие лобби этого же режима
-        for lid in lobby_players[mode]:
-            if user_id in lobby_players[mode][lid]:
-                del lobby_players[mode][lid][user_id]
-                lobby_id = lid # Обновляем ID для корректного обновления сообщений
-                found = True
-                break
+    import core
+    result = await core.leave_lobby(user_id, mode, lobby_id)
     
-    if found:
-        db.remove_lobby_member(user_id)
+    if result["status"] == "success":
         await callback.message.answer("❌ Вы вышли из лобби.")
         await update_all_lobby_messages(mode, lobby_id)
         await update_lobby_list_for_all(mode)
     else:
-        await callback.answer("Вы не в этом лобби.")
+        # Если в указанном нет, проверяем все лобби (на случай рассинхрона)
+        import state
+        current = await state.get_user_current_lobby(user_id)
+        if current:
+            await core.leave_lobby(user_id, current["mode"], current["id"])
+            await callback.message.answer("❌ Вы вышли из лобби.")
+            await update_all_lobby_messages(current["mode"], current["id"])
+            await update_lobby_list_for_all(current["mode"])
+        else:
+            await callback.answer(result.get("message", "Вы не в лобби."), show_alert=True)
 
 @dp.message(F.text == "Список лидеров 🏆")
 async def leaderboard(message: types.Message):
@@ -1504,32 +1500,6 @@ async def rules(message: types.Message):
     )
     await message.answer(rules_text, reply_markup=main_menu_keyboard(message.from_user.id))
 
-import uvicorn
-from app import app as fastapi_app
-
-async def main():
-    db.init_db()
-    
-    # Синхронизация лобби из БД при старте
-    lobby_members = db.get_all_lobby_members()
-    for mode, lid, uid in lobby_members:
-        user = db.get_user(uid)
-        if user:
-            level = db.get_level_by_elo(user[2])
-            lobby_players[mode][lid][uid] = {"nickname": user[1], "level": level, "game_id": user[0]}
-    
-    logging.info(f"Восстановлено {len(lobby_members)} участников лобби из БД")
-    
-    # Настройка и запуск FastAPI
-    config = uvicorn.Config(fastapi_app, host="0.0.0.0", port=8000, loop="asyncio")
-    server = uvicorn.Server(config)
-    
-    # Запуск бота и сервера параллельно
-    await asyncio.gather(
-        dp.start_polling(bot),
-        server.serve()
-    )
-
 @dp.message(F.text == "Поддержка 🛠️")
 async def support_handler(message: types.Message, state: FSMContext):
     # Проверка на бан
@@ -1589,14 +1559,14 @@ async def process_support_message(message: types.Message, state: FSMContext):
     user_data = db.get_user(message.from_user.id)
     nickname = user_data[1] if user_data else "Неизвестно"
     
-    # Инициализируем в памяти
-    if ticket_id not in support_requests:
-        support_requests[ticket_id] = {
-            "user_id": message.from_user.id,
-            "text": message.text,
-            "admin_id": None,
-            "messages": {}
-        }
+    # Сохраняем тикет в Redis
+    import state
+    ticket_data = {
+        "user_id": message.from_user.id,
+        "text": message.text,
+        "admin_id": None,
+        "messages": {}
+    }
     
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(text="🙋‍♂️ Взять в работу", callback_data=f"sup_take_{ticket_id}"))
@@ -1607,15 +1577,14 @@ async def process_support_message(message: types.Message, state: FSMContext):
         f"📝 Текст: {message.text or '[Фото]'}"
     )
     
-    sent_to_at_least_one = False
     for admin_id in ADMINS:
         try:
             msg = await bot.send_message(admin_id, admin_text, reply_markup=builder.as_markup())
-            support_requests[ticket_id]["messages"][admin_id] = msg.message_id
-            sent_to_at_least_one = True
+            ticket_data["messages"][str(admin_id)] = msg.message_id
         except Exception as e:
             logging.error(f"Failed to send support notification to admin {admin_id}: {e}")
             
+    await state.set_ticket(ticket_id, ticket_data)
     await message.answer(f"✅ Ваше обращение №{ticket_id} успешно отправлено! 📨\nОжидайте ответа администратора.", reply_markup=main_menu_keyboard(message.from_user.id))
     await state.clear()
 
@@ -1633,10 +1602,11 @@ async def handle_support_take(callback: types.CallbackQuery, state: FSMContext):
     
     ticket_id = int(callback.data.split("_")[2])
     
-    # Пытаемся получить из памяти
-    req = support_requests.get(ticket_id)
+    import state
+    # Пытаемся получить из Redis
+    req = await state.get_ticket(ticket_id)
     
-    # Если в памяти нет (после перезагрузки), пробуем из БД
+    # Если в Redis нет (после перезагрузки или истечения TTL), пробуем из БД
     if not req:
         ticket_db = db.get_support_ticket(ticket_id)
         if not ticket_db:
@@ -1648,14 +1618,13 @@ async def handle_support_take(callback: types.CallbackQuery, state: FSMContext):
             await callback.answer("Это обращение уже закрыто.", show_alert=True)
             return
             
-        # Восстанавливаем в памяти
-        support_requests[ticket_id] = {
+        # Восстанавливаем
+        req = {
             "user_id": uid,
             "text": text,
             "admin_id": admin_id,
-            "messages": {} # Сообщения админов восстановить сложнее, просто работаем с текущим
+            "messages": {}
         }
-        req = support_requests[ticket_id]
 
     if req["admin_id"] is not None:
         await callback.answer(f"Это обращение уже взял админ ID: {req['admin_id']}", show_alert=True)
@@ -1663,10 +1632,12 @@ async def handle_support_take(callback: types.CallbackQuery, state: FSMContext):
         
     req["admin_id"] = callback.from_user.id
     db.update_support_ticket(ticket_id, admin_id=callback.from_user.id)
+    await state.set_ticket(ticket_id, req)
     
-    # Обновляем сообщение у всех админов (если они есть в памяти)
-    for admin_id, msg_id in req.get("messages", {}).items():
+    # Обновляем сообщение у всех админов
+    for admin_id_str, msg_id in req.get("messages", {}).items():
         try:
+            admin_id = int(admin_id_str)
             status = "✅ Вы взяли в работу" if admin_id == callback.from_user.id else f"🚫 Взял админ ID: {callback.from_user.id}"
             await bot.edit_message_text(
                 chat_id=admin_id,
@@ -1675,7 +1646,7 @@ async def handle_support_take(callback: types.CallbackQuery, state: FSMContext):
             )
         except: pass
     
-    # Если сообщения не в памяти, просто обновляем текущее
+    # Если сообщения не были обновлены (не было в списке messages), обновляем текущее
     if not req.get("messages"):
         try:
             await callback.message.edit_text(
@@ -1717,8 +1688,9 @@ async def process_admin_reply(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    # Пытаемся получить из памяти или БД
-    req = support_requests.get(ticket_id)
+    import state as app_state
+    # Пытаемся получить из Redis или БД
+    req = await app_state.get_ticket(ticket_id)
     if not req:
         ticket_db = db.get_support_ticket(ticket_id)
         if ticket_db:
@@ -1743,9 +1715,8 @@ async def process_admin_reply(message: types.Message, state: FSMContext):
     except:
         await message.answer("❌ Не удалось отправить сообщение игроку (возможно, бот заблокирован).")
         
-    # Удаляем обращение из памяти после ответа
-    if ticket_id in support_requests:
-        del support_requests[ticket_id]
+    # Удаляем обращение из Redis после ответа
+    await app_state.delete_ticket(ticket_id)
     await state.clear()
 
 @dp.message(F.text == "Настройки ⚙️")
